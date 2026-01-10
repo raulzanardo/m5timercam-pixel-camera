@@ -10,6 +10,8 @@
 #include <Preferences.h>
 #include <esp_system.h>
 #include <cstdlib>
+#include <vector>
+#include <algorithm>
 
 #include "driver/gpio.h"
 #include "filter.h"
@@ -52,6 +54,7 @@ constexpr pixformat_t CAPTURE_PIXEL_FORMAT = PIXFORMAT_RGB565;
 constexpr framesize_t CAPTURE_FRAME_SIZE = FRAMESIZE_QVGA;
 constexpr uint8_t CAPTURE_FB_COUNT = 2;
 Preferences preferences;
+bool preferencesReady = false;
 uint32_t photoCounter = 0;
 WiFiServer exportServer(80);
 bool exportServerActive = false;
@@ -70,7 +73,7 @@ String formatBytes(size_t bytes)
     return String(bytes / 1024.0 / 1024.0, 2) + " MB";
 }
 
-bool initCamera(pixformat_t fmt, framesize_t size, bool enableAec2 = false)
+bool initCamera(pixformat_t fmt, framesize_t size, bool enableAec2 = false, uint32_t xclkHz = XCLK_FREQ_HZ)
 {
     camera_config_t config;
     config.ledc_channel = LEDC_CHANNEL_0;
@@ -91,7 +94,7 @@ bool initCamera(pixformat_t fmt, framesize_t size, bool enableAec2 = false)
     config.pin_sccb_scl = SIOC_GPIO_NUM;
     config.pin_pwdn = PWDN_GPIO_NUM;
     config.pin_reset = RESET_GPIO_NUM;
-    config.xclk_freq_hz = XCLK_FREQ_HZ;
+    config.xclk_freq_hz = xclkHz;
     config.pixel_format = fmt;
     config.frame_size = size;
     config.jpeg_quality = 0;
@@ -108,6 +111,9 @@ bool initCamera(pixformat_t fmt, framesize_t size, bool enableAec2 = false)
     {
         s->set_vflip(s, 1); // flip vertically
         s->set_aec2(s, enableAec2 ? 1 : 0);
+        // Enable AWB/AGC when capturing for more stable frames
+        s->set_whitebal(s, enableAec2 ? 1 : 0);  // AWB
+        s->set_gain_ctrl(s, enableAec2 ? 1 : 0); // AGC
     }
     return true;
 }
@@ -145,7 +151,10 @@ bool saveJpgToSpiffs(camera_fb_t *fb)
     file.flush();
     file.close();
     photoCounter++;
-    preferences.putUInt("photo_idx", photoCounter);
+    if (preferencesReady)
+    {
+        preferences.putUInt("photo_idx", photoCounter);
+    }
     Serial.printf("Saved JPG to %s (next:%lu)\n", path, static_cast<unsigned long>(photoCounter));
     return true;
 }
@@ -156,11 +165,21 @@ void capturePhotoToJpg()
     // Trying to change resolution without reinit causes memory issues
     esp_camera_deinit();
 
-    if (!initCamera(CAPTURE_PIXEL_FORMAT, CAPTURE_FRAME_SIZE, true))
+    // Use higher XCLK during capture to reduce rolling-shutter wobble
+    if (!initCamera(CAPTURE_PIXEL_FORMAT, CAPTURE_FRAME_SIZE, true, 20000000))
     {
         Serial.println("Failed to init capture mode");
-        initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, false);
+        initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, false, XCLK_FREQ_HZ);
         return;
+    }
+
+    // Discard a few frames to let exposure/gain settle
+    for (int i = 0; i < 2; ++i)
+    {
+        camera_fb_t *warm = esp_camera_fb_get();
+        if (warm)
+            esp_camera_fb_return(warm);
+        delay(40);
     }
 
     camera_fb_t *fb = esp_camera_fb_get();
@@ -168,7 +187,7 @@ void capturePhotoToJpg()
     {
         Serial.println("Photo capture failed");
         esp_camera_deinit();
-        initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, false);
+        initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, false, XCLK_FREQ_HZ);
         return;
     }
 
@@ -184,7 +203,7 @@ void capturePhotoToJpg()
 
     // Return to live preview mode
     esp_camera_deinit();
-    initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, false);
+    initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, false, XCLK_FREQ_HZ);
 }
 
 void stopExportServer()
@@ -269,7 +288,7 @@ void handleExportClient(WiFiClient &client)
             return;
         }
         client.println("HTTP/1.1 200 OK");
-        client.println("Content-Type: image/png");
+        client.println("Content-Type: image/jpeg");
         client.println("Connection: close");
         client.println();
         while (f.available())
@@ -346,7 +365,14 @@ void handleExportClient(WiFiClient &client)
         LittleFS.mkdir("/photos");
     }
 
-    uint32_t photoCount = 0;
+    struct PhotoEntry
+    {
+        String name;
+        size_t size;
+        uint32_t idx;
+    };
+
+    std::vector<PhotoEntry> photos;
     {
         File rootCount = LittleFS.open("/photos");
         if (rootCount)
@@ -354,13 +380,36 @@ void handleExportClient(WiFiClient &client)
             File fCount = rootCount.openNextFile();
             while (fCount)
             {
-                photoCount++;
+                PhotoEntry entry;
+                entry.name = String(fCount.name());
+                entry.size = fCount.size();
                 fCount.close();
+
+                int us = entry.name.lastIndexOf('_');
+                int dot = entry.name.lastIndexOf('.');
+                if (us >= 0 && dot > us)
+                {
+                    entry.idx = static_cast<uint32_t>(entry.name.substring(us + 1, dot).toInt());
+                }
+                else
+                {
+                    entry.idx = 0;
+                }
+
+                photos.push_back(entry);
                 fCount = rootCount.openNextFile();
             }
             rootCount.close();
         }
     }
+
+    std::sort(photos.begin(), photos.end(), [](const PhotoEntry &a, const PhotoEntry &b)
+              {
+        if (a.idx != b.idx)
+            return a.idx < b.idx;
+        return a.name < b.name; });
+
+    const uint32_t photoCount = static_cast<uint32_t>(photos.size());
 
     constexpr size_t EST_PHOTO_BYTES = 100 * 1024;
     const uint32_t remainingPhotos = (EST_PHOTO_BYTES > 0) ? static_cast<uint32_t>(freeBytes / EST_PHOTO_BYTES) : 0;
@@ -421,37 +470,28 @@ void handleExportClient(WiFiClient &client)
                    "<a class='btn' href='/delete-all' onclick='return confirm(\"Delete all photos?\");'>Delete all photos</a>"
                    "</div>"
                    "</div><div class='grid'>");
-    File root = LittleFS.open("/photos");
-    if (root)
+    for (const auto &entry : photos)
     {
-        File f = root.openNextFile();
-        while (f)
-        {
-            String name = String(f.name());
-            size_t fileSize = f.size();
-            f.close();
+        const String &name = entry.name;
+        const size_t fileSize = entry.size;
 
-            Serial.printf("Export: listing %s\n", name.c_str());
-            client.print("<div class='card'>");
-            client.print("<div class='name'>");
-            client.print(name);
-            client.print("</div>");
-            client.print("<div class='size'>");
-            client.print(formatBytes(fileSize));
-            client.print("</div>");
-            client.print("<div>");
-            client.print("<a class='btn' href=\"/delete?name=");
-            client.print(name);
-            client.print("\" onclick='return confirm(\"Delete this photo?\");'>Delete</a> ");
-            client.print("<a class='btn2' href=\"/file?name=");
-            client.print(name);
-            client.print("\">Download</a>");
-            client.print("</div>");
-            client.println("</div>");
-
-            f = root.openNextFile();
-        }
-        root.close();
+        Serial.printf("Export: listing %s\n", name.c_str());
+        client.print("<div class='card'>");
+        client.print("<div class='name'>");
+        client.print(name);
+        client.print("</div>");
+        client.print("<div class='size'>");
+        client.print(formatBytes(fileSize));
+        client.print("</div>");
+        client.print("<div>");
+        client.print("<a class='btn' href=\"/delete?name=");
+        client.print(name);
+        client.print("\" onclick='return confirm(\"Delete this photo?\");'>Delete</a> ");
+        client.print("<a class='btn2' href=\"/file?name=");
+        client.print(name);
+        client.print("\">Download</a>");
+        client.print("</div>");
+        client.println("</div>");
     }
     client.println("</div></body></html>");
     client.stop();
@@ -494,6 +534,10 @@ void enterDeepSleep()
     while (digitalRead(BUTTON_PIN) == LOW)
     {
         delay(1);
+    }
+    if (preferencesReady)
+    {
+        preferences.end();
     }
     esp_deep_sleep_start();
 }
@@ -608,7 +652,15 @@ void handleAction(MenuItem item)
         enterDeepSleep();
         break; // not reached
     case MenuItem::Export:
+        // Show connecting state while Wi-Fi is being established
+        display.clearBuffer();
+        display.setFont(u8g2_font_5x8_mf);
+        display.drawFrame(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+        display.drawStr(2, 12, "connecting...");
+        display.sendBuffer();
+
         startExportServer();
+        renderMenu(); // refresh to show IP if connected
         break;
     case MenuItem::ToggleFilter:
         filterEnabled = !filterEnabled;
@@ -710,9 +762,56 @@ void setup()
     button.attachDoubleClick(handleDoubleClick);
     button.attachLongPressStart(handleLongPress);
 
-    preferences.begin("photos", false);
-    photoCounter = preferences.getUInt("photo_idx", 0);
-    filterEnabled = preferences.getBool("filter_enabled", false);
+    preferencesReady = preferences.begin("photos", false);
+    if (!preferencesReady)
+    {
+        Serial.println("Preferences init failed; photo index will rely on filesystem scan only");
+    }
+    if (preferencesReady)
+    {
+        photoCounter = preferences.getUInt("photo_idx", 0);
+        filterEnabled = preferences.getBool("filter_enabled", false);
+    }
+
+    // Ensure photoCounter is absolute to avoid overwriting older photos
+    if (littlefsReady)
+    {
+        if (!LittleFS.exists("/photos"))
+        {
+            LittleFS.mkdir("/photos");
+        }
+        uint32_t maxIdx = 0;
+        File rootIdx = LittleFS.open("/photos");
+        if (rootIdx)
+        {
+            File fIdx = rootIdx.openNextFile();
+            while (fIdx)
+            {
+                String fname = String(fIdx.name());
+                fIdx.close();
+                int us = fname.lastIndexOf('_');
+                int dot = fname.lastIndexOf('.');
+                if (us >= 0 && dot > us)
+                {
+                    String numStr = fname.substring(us + 1, dot);
+                    uint32_t idx = static_cast<uint32_t>(numStr.toInt());
+                    if (idx > maxIdx)
+                        maxIdx = idx;
+                }
+                fIdx = rootIdx.openNextFile();
+            }
+            rootIdx.close();
+        }
+        uint32_t fsNext = maxIdx + 1;
+        if (fsNext > photoCounter)
+        {
+            photoCounter = fsNext;
+        }
+        if (preferencesReady)
+        {
+            preferences.putUInt("photo_idx", photoCounter);
+        }
+    }
 
     // if (!TimerCAM.Camera.begin())
     // {

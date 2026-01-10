@@ -6,10 +6,13 @@ A custom firmware for the M5Stack TimerCAM.
   <img src="images/m5timercamf.png" width="400" alt="M5TimerCAM Device">
 </p>
 
+[M5Stack TimerCamera-F](https://docs.m5stack.com/en/unit/timercam_f)
+
 ## Hardware
 
 - M5Stack TimerCAM (ESP32-based camera module)
 - OV3660 camera sensor
+- 4MB flash for firmware and photo storage.
 - 0.49" OLED display (SSD1306, 64X32 pixels)
 
 ## Button GPIO problem
@@ -50,6 +53,8 @@ The interface features a modern, dark-themed grid layout showing all captured ph
 ### Menu Navigation
 
 This video demonstrates the on-device menu system including the export mode.
+
+Long press enters the menu. While in the menu a short press cylces between the menu items, long press toggles the menu item.
 
 <p align="center">
   <img src="images/display.png" width="400" alt="M5TimerCAM Device">
