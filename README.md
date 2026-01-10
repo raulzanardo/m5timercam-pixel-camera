@@ -37,7 +37,7 @@ The interface features a modern, dark-themed grid layout showing all captured ph
 
 ### Menu Navigation
 
-https://github.com/raulzanardo/m5timercam-pixel-camera/assets/video_1.mp4
+![Menu demonstration](images/video_1.mp4)
 
 This video demonstrates the on-device menu system including the export mode.
 
