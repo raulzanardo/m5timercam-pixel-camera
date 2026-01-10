@@ -43,6 +43,10 @@ The camera includes a built-in web server for managing captured photos.
 
 The interface features a modern, dark-themed grid layout showing all captured photos with file sizes and easy-to-use controls.
 
+<p align="center">
+  <img src="images/web_interface.png" width="300" alt="Web interface preview">
+</p>
+
 ### Menu Navigation
 
 This video demonstrates the on-device menu system including the export mode.
@@ -57,6 +61,15 @@ This video demonstrates the on-device menu system including the export mode.
 I added a small OLED display to the back of the case so the camera image could be previewd. The image is precessed with dithering and size reduction, it is not the best image but you can kind of figure it ou what is going on. I also had to remove the current two batteries of the case to give space to the display.
 
 https://github.com/user-attachments/assets/38396504-9a6e-4b44-8a0a-ec52146e3762
+
+## Sample Photos
+
+Photos captured with the M5TimerCAM using the pixel art filter and Pico-8 color palette:
+
+<p align="center">
+  <img src="images/photos/photo_7.jpg" width="300" alt="Sample Photo 1">
+  <img src="images/photos/photo_8.jpg" width="300" alt="Sample Photo 2">
+</p>
 
 ## Prerequisites
 

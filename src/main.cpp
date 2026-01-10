@@ -152,10 +152,13 @@ bool saveJpgToSpiffs(camera_fb_t *fb)
 
 void capturePhotoToJpg()
 {
-    // Reconfigure to capture-friendly format
+    // Must reinitialize camera for different frame buffer allocation
+    // Trying to change resolution without reinit causes memory issues
     esp_camera_deinit();
+
     if (!initCamera(CAPTURE_PIXEL_FORMAT, CAPTURE_FRAME_SIZE, true))
     {
+        Serial.println("Failed to init capture mode");
         initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, false);
         return;
     }
@@ -165,7 +168,7 @@ void capturePhotoToJpg()
     {
         Serial.println("Photo capture failed");
         esp_camera_deinit();
-        initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE);
+        initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, false);
         return;
     }
 
@@ -178,6 +181,8 @@ void capturePhotoToJpg()
     saveJpgToSpiffs(fb);
 
     esp_camera_fb_return(fb);
+
+    // Return to live preview mode
     esp_camera_deinit();
     initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, false);
 }
@@ -626,18 +631,29 @@ void handleClick()
         return;
     }
 
-    // Not in menu: show a quick toast
-    showToast = true;
-    toastUntilMs = millis() + TOAST_DURATION_MS;
+    // Show immediate feedback before capture starts
     TimerCAM.Power.setLed(PHOTO_LED_BRIGHTNESS);
     photoBlinkActive = true;
     photoBlinkUntilMs = millis() + PHOTO_LED_DURATION_MS;
+
+    // Show processing message
     display.clearBuffer();
     display.setFont(u8g2_font_5x8_mf);
     display.drawFrame(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-    display.drawStr(5, 18, "photo taken");
+    display.drawStr(2, 18, "processing...");
     display.sendBuffer();
+
+    // Take photo (this is the slow part)
     capturePhotoToJpg();
+
+    // Show completion toast after capture
+    showToast = true;
+    toastUntilMs = millis() + TOAST_DURATION_MS;
+    display.clearBuffer();
+    display.setFont(u8g2_font_5x8_mf);
+    display.drawFrame(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    display.drawStr(5, 18, "photo saved");
+    display.sendBuffer();
 }
 
 void handleDoubleClick()
