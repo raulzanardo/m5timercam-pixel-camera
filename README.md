@@ -2,11 +2,13 @@
 
 A custom firmware for the M5Stack TimerCAM.
 
+<img src="images/m5timercamf.png" width="400" alt="M5TimerCAM Device">
+
 ## Hardware
 
  - M5Stack TimerCAM (ESP32-based camera module)
  - OV3660 camera sensor
- - 0.96" OLED display (SSD1306, 64X32 pixels)
+ - 0.49" OLED display (SSD1306, 64X32 pixels)
 
 ## Features
 
@@ -33,9 +35,18 @@ The camera includes a built-in web server for managing captured photos.
 
 The interface features a modern, dark-themed grid layout showing all captured photos with file sizes and easy-to-use controls.
 
-## Live preview 
+### Menu Navigation
+
+https://github.com/raulzanardo/m5timercam-pixel-camera/assets/video_1.mp4
+
+This video demonstrates the on-device menu system including the export mode.
+
+## Live preview
 
 I added a small OLED display to the back of the case so the camera image could be previewd. The image is precessed with dithering and size reduction, it is not the best image but you can kind of figure it ou what is going on. I also had to remove the current two batteries of the case to give space to the display.
+
+<img src="images/display.png" width="400" alt="M5TimerCAM Device">
+
 
 ## Prerequisites
 
