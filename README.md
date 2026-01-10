@@ -42,11 +42,9 @@ The interface features a modern, dark-themed grid layout showing all captured ph
 This video demonstrates the on-device menu system including the export mode.
 
 <p align="center">
-  <a href="images/video_1.mp4">
-    <img src="images/display.png" width="400" alt="Click to view video">
-    <br>
-    <em>▶️ Click to view menu navigation video</em>
-  </a>
+  <video controls height="320">
+    <source src="images/video_1.mp4" type="video/mp4">
+  </video>
 </p>
 
 ## Live preview
