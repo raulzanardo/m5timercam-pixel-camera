@@ -43,6 +43,7 @@ This video demonstrates the on-device menu system including the export mode.
 
 <p align="center">
   <img src="images/display.png" width="400" alt="M5TimerCAM Device">
+  <img src="images/back_cover.png" width="320" alt="M5TimerCAM Device">
 </p>
 
 ## Live preview
