@@ -12,6 +12,12 @@ A custom firmware for the M5Stack TimerCAM.
 - OV3660 camera sensor
 - 0.49" OLED display (SSD1306, 64X32 pixels)
 
+## Button GPIO problem
+
+Make sure to check this forum thread about the TimerCam buttons GPIO not having the pull up resistor in it.
+
+[TimerCam Power/Wake button docs – G38 instead of G37](https://community.m5stack.com/topic/4530/timercam-power-wake-button-docs-g38-instead-of-g37)
+
 ## Features
 
 - Real-time camera image processing
