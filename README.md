@@ -51,9 +51,8 @@ This video demonstrates the on-device menu system including the export mode.
 
 I added a small OLED display to the back of the case so the camera image could be previewd. The image is precessed with dithering and size reduction, it is not the best image but you can kind of figure it ou what is going on. I also had to remove the current two batteries of the case to give space to the display.
 
-<p align="center">
-  <img src="images/display.png" width="400" alt="OLED Display">
-</p>
+
+https://github.com/user-attachments/assets/38396504-9a6e-4b44-8a0a-ec52146e3762
 
 ## Prerequisites
 
