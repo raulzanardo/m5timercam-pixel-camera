@@ -8,9 +8,9 @@ A custom firmware for the M5Stack TimerCAM.
 
 ## Hardware
 
- - M5Stack TimerCAM (ESP32-based camera module)
- - OV3660 camera sensor
- - 0.49" OLED display (SSD1306, 64X32 pixels)
+- M5Stack TimerCAM (ESP32-based camera module)
+- OV3660 camera sensor
+- 0.49" OLED display (SSD1306, 64X32 pixels)
 
 ## Features
 
@@ -42,15 +42,12 @@ The interface features a modern, dark-themed grid layout showing all captured ph
 This video demonstrates the on-device menu system including the export mode.
 
 <p align="center">
-  <video controls height="320">
-    <source src="images/video_1.mp4" type="video/mp4">
-  </video>
+  <img src="images/display.png" width="400" alt="M5TimerCAM Device">
 </p>
 
 ## Live preview
 
 I added a small OLED display to the back of the case so the camera image could be previewd. The image is precessed with dithering and size reduction, it is not the best image but you can kind of figure it ou what is going on. I also had to remove the current two batteries of the case to give space to the display.
-
 
 https://github.com/user-attachments/assets/38396504-9a6e-4b44-8a0a-ec52146e3762
 
@@ -63,12 +60,14 @@ https://github.com/user-attachments/assets/38396504-9a6e-4b44-8a0a-ec52146e3762
 ## Setup
 
 1. Clone this repository:
+
    ```bash
    git clone https://github.com/raulzanardo/m5timercam-pixel-camera.git
    cd m5timercam-pixel-camera
    ```
 
 2. Create your configuration file:
+
    ```bash
    cp include/config.example.h include/config.h
    ```
@@ -100,6 +99,7 @@ pio device monitor
 ## Configuration
 
 Edit `include/config.h` to customize:
+
 - WiFi settings
 - Camera resolution and quality
 - Filter parameters
