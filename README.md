@@ -2,7 +2,9 @@
 
 A custom firmware for the M5Stack TimerCAM.
 
-<img src="images/m5timercamf.png" width="400" alt="M5TimerCAM Device">
+<p align="center">
+  <img src="images/m5timercamf.png" width="400" alt="M5TimerCAM Device">
+</p>
 
 ## Hardware
 
@@ -37,16 +39,21 @@ The interface features a modern, dark-themed grid layout showing all captured ph
 
 ### Menu Navigation
 
-![Menu demonstration](images/video_1.mp4)
-
 This video demonstrates the on-device menu system including the export mode.
+
+<p align="center">
+  <video controls height="320">
+    <source src="images/video_1.mp4" type="video/mp4">
+  </video>
+</p>
 
 ## Live preview
 
 I added a small OLED display to the back of the case so the camera image could be previewd. The image is precessed with dithering and size reduction, it is not the best image but you can kind of figure it ou what is going on. I also had to remove the current two batteries of the case to give space to the display.
 
-<img src="images/display.png" width="400" alt="M5TimerCAM Device">
-
+<p align="center">
+  <img src="images/display.png" width="400" alt="OLED Display">
+</p>
 
 ## Prerequisites
 
