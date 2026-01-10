@@ -512,11 +512,11 @@ void enterDeepSleep()
 
     sensor_t *s = esp_camera_sensor_get();
 
-    s->set_reg(s, 0x3008, 0xff, 0x01); // banksel --- ? Is this needed for ov3660? Is there only 1 bank
+    s->set_reg(s, 0x3008, 0xff, 0x01);
     delay(100);
-    s->set_reg(s, 0x3008, 0xff, 0x80); // reset (we do this to clear the sensor registries, it seems to get more consistent images this way)
+    s->set_reg(s, 0x3008, 0xff, 0x80);
     delay(100);
-    s->set_reg(s, 0x3008, 0xff, 0x40); // stand by  (sensor, register, mask, value)
+    s->set_reg(s, 0x3008, 0xff, 0x40);
     delay(100);
 
     esp_camera_deinit();
