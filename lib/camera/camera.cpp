@@ -9,6 +9,50 @@
 
 namespace
 {
+  uint16_t g_xMap[SCREEN_WIDTH];
+  uint16_t g_yMap[SCREEN_HEIGHT];
+  uint16_t g_cachedSrcWidth = 0;
+  uint16_t g_cachedSrcHeight = 0;
+
+  void updateSamplingMap(uint16_t srcWidth, uint16_t srcHeight)
+  {
+    if (srcWidth == g_cachedSrcWidth && srcHeight == g_cachedSrcHeight)
+    {
+      return;
+    }
+
+    // 16.16 fixed-point mapping to avoid float work in the hot preview loop.
+    const uint32_t scaleXfp = (static_cast<uint32_t>(srcWidth) << 16) / SCREEN_WIDTH;
+    const uint32_t scaleYfp = (static_cast<uint32_t>(srcHeight) << 16) / SCREEN_HEIGHT;
+    const uint32_t scaleFp = (scaleXfp < scaleYfp) ? scaleXfp : scaleYfp;
+
+    const int32_t cropXfp = ((static_cast<int32_t>(srcWidth) << 16) - static_cast<int32_t>(SCREEN_WIDTH * scaleFp)) / 2;
+    const int32_t cropYfp = ((static_cast<int32_t>(srcHeight) << 16) - static_cast<int32_t>(SCREEN_HEIGHT * scaleFp)) / 2;
+
+    for (int x = 0; x < SCREEN_WIDTH; ++x)
+    {
+      int32_t camX = (cropXfp + static_cast<int32_t>(x) * static_cast<int32_t>(scaleFp)) >> 16;
+      if (camX < 0)
+        camX = 0;
+      if (camX >= srcWidth)
+        camX = srcWidth - 1;
+      g_xMap[x] = static_cast<uint16_t>(camX);
+    }
+
+    for (int y = 0; y < SCREEN_HEIGHT; ++y)
+    {
+      int32_t camY = (cropYfp + static_cast<int32_t>(y) * static_cast<int32_t>(scaleFp)) >> 16;
+      if (camY < 0)
+        camY = 0;
+      if (camY >= srcHeight)
+        camY = srcHeight - 1;
+      g_yMap[y] = static_cast<uint16_t>(camY);
+    }
+
+    g_cachedSrcWidth = srcWidth;
+    g_cachedSrcHeight = srcHeight;
+  }
+
   bool initCamera(pixformat_t fmt, framesize_t size, bool enableAec2 = false, uint32_t xclkHz = XCLK_FREQ_HZ)
   {
     camera_config_t config;
@@ -161,20 +205,14 @@ namespace CameraService
 
     int16_t (*buffer)[SCREEN_WIDTH] = reinterpret_cast<int16_t (*)[SCREEN_WIDTH]>(ditherBuffer);
 
-    const float scale_x = static_cast<float>(fb->width) / SCREEN_WIDTH;
-    const float scale_y = static_cast<float>(fb->height) / SCREEN_HEIGHT;
-    const float scale = (scale_x < scale_y) ? scale_x : scale_y;
-
-    const float crop_x = (fb->width - (SCREEN_WIDTH * scale)) * 0.5f;
-    const float crop_y = (fb->height - (SCREEN_HEIGHT * scale)) * 0.5f;
+    updateSamplingMap(fb->width, fb->height);
 
     for (int y = 0; y < SCREEN_HEIGHT; y++)
     {
+      const int rowBase = static_cast<int>(g_yMap[y]) * fb->width;
       for (int x = 0; x < SCREEN_WIDTH; x++)
       {
-        int cam_x = static_cast<int>(crop_x + x * scale);
-        int cam_y = static_cast<int>(crop_y + y * scale);
-        int pixel_index = cam_y * fb->width + cam_x;
+        const int pixel_index = rowBase + g_xMap[x];
         buffer[y][x] = fb->buf[pixel_index];
       }
     }
