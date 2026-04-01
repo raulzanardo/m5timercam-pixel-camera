@@ -16,6 +16,8 @@
 #include "driver/gpio.h"
 #include "filter.h"
 #include "config.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
 
 U8G2_SSD1306_64X32_1F_F_HW_I2C display(U8G2_R0, /* reset=*/U8X8_PIN_NONE);
 OneButton button(BUTTON_PIN, true, false);
@@ -839,6 +841,7 @@ void setup()
 
 void loop()
 {
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // disable detector
 
     // Always tick the button first
     button.tick();
