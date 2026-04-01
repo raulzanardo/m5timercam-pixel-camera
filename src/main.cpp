@@ -12,12 +12,12 @@
 #include <cstdlib>
 #include <vector>
 #include <algorithm>
-
 #include "driver/gpio.h"
-#include "filter.h"
-#include "config.h"
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
+
+#include "config.h"
+#include "filter.h"
 
 U8G2_SSD1306_64X32_1F_F_HW_I2C display(U8G2_R0, /* reset=*/U8X8_PIN_NONE);
 OneButton button(BUTTON_PIN, true, false);
@@ -30,9 +30,6 @@ enum class MenuItem
     Status,
 };
 
-const char *menuLabels[] = {"off", "export", "filter", "status"};
-constexpr size_t MENU_COUNT = sizeof(menuLabels) / sizeof(menuLabels[0]);
-
 bool inMenu = false;
 size_t menuIndex = 0;
 bool isOff = false;
@@ -40,21 +37,9 @@ bool filterEnabled = false;
 bool littlefsReady = false;
 bool showToast = false;
 uint32_t toastUntilMs = 0;
-constexpr uint32_t TOAST_DURATION_MS = 800;
 uint32_t lastStatusRefreshMs = 0;
-constexpr uint32_t STATUS_REFRESH_MS = 5000;
 bool photoBlinkActive = false;
 uint32_t photoBlinkUntilMs = 0;
-constexpr uint8_t PHOTO_LED_BRIGHTNESS = 80; // lower brightness to cut LED draw (10-bit duty)
-constexpr uint32_t PHOTO_LED_DURATION_MS = 150;
-constexpr uint8_t CPU_FREQ_LOW_MHZ = 80;
-constexpr uint8_t CPU_FREQ_HIGH_MHZ = 240;  // use full speed when exporting
-constexpr uint32_t XCLK_FREQ_HZ = 10000000; // lower clock to cut active power
-constexpr pixformat_t LIVE_PIXEL_FORMAT = PIXFORMAT_GRAYSCALE;
-constexpr framesize_t LIVE_FRAME_SIZE = FRAMESIZE_QQVGA;
-constexpr pixformat_t CAPTURE_PIXEL_FORMAT = PIXFORMAT_RGB565;
-constexpr framesize_t CAPTURE_FRAME_SIZE = FRAMESIZE_QVGA;
-constexpr uint8_t CAPTURE_FB_COUNT = 2;
 Preferences preferences;
 bool preferencesReady = false;
 uint32_t photoCounter = 0;
@@ -62,7 +47,6 @@ WiFiServer exportServer(80);
 bool exportServerActive = false;
 bool exportWifiReady = false;
 bool timerPowerReady = false; // tracks TimerCAM.begin success for power features
-constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 10000;
 
 static int16_t ditherBuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
 
@@ -168,7 +152,7 @@ void capturePhotoToJpg()
     esp_camera_deinit();
 
     // Use higher XCLK during capture to reduce rolling-shutter wobble
-    if (!initCamera(CAPTURE_PIXEL_FORMAT, CAPTURE_FRAME_SIZE, true, 20000000))
+    if (!initCamera(CAPTURE_PIXEL_FORMAT, CAPTURE_FRAME_SIZE, true, CAPTURE_XCLK_FREQ_HZ))
     {
         Serial.println("Failed to init capture mode");
         initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, false, XCLK_FREQ_HZ);
@@ -413,7 +397,6 @@ void handleExportClient(WiFiClient &client)
 
     const uint32_t photoCount = static_cast<uint32_t>(photos.size());
 
-    constexpr size_t EST_PHOTO_BYTES = 100 * 1024;
     const uint32_t remainingPhotos = (EST_PHOTO_BYTES > 0) ? static_cast<uint32_t>(freeBytes / EST_PHOTO_BYTES) : 0;
 
     client.println("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n");
@@ -553,7 +536,7 @@ void renderMenu()
     // Highlight current item with a light banner near the top (using freed space)
     display.drawBox(1, 3, SCREEN_WIDTH - 2, 10);
     display.setDrawColor(0); // invert inside banner
-    display.drawStr(3, 11, menuLabels[menuIndex]);
+    display.drawStr(3, 11, MENU_LABEL(menuIndex));
     display.setDrawColor(1);
 
     // Show state hints
