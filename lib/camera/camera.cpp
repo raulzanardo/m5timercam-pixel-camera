@@ -53,7 +53,7 @@ namespace
     g_cachedSrcHeight = srcHeight;
   }
 
-  bool initCamera(pixformat_t fmt, framesize_t size, bool enableAec2 = false, uint32_t xclkHz = XCLK_FREQ_HZ)
+  bool initCamera(pixformat_t fmt, framesize_t size, uint32_t xclkHz = XCLK_FREQ_HZ)
   {
     camera_config_t config;
     config.ledc_channel = LEDC_CHANNEL_0;
@@ -90,9 +90,15 @@ namespace
     if (s)
     {
       s->set_vflip(s, 1);
-      s->set_aec2(s, enableAec2 ? 1 : 0);
-      s->set_whitebal(s, enableAec2 ? 1 : 0);
-      s->set_gain_ctrl(s, enableAec2 ? 1 : 0);
+      s->set_whitebal(s, 1);      // enable AWB
+      s->set_awb_gain(s, 1);      // enable AWB gain
+      s->set_wb_mode(s, 0);       // 0=Auto
+      s->set_bpc(s, 1);           // bad pixel correction ON
+      s->set_wpc(s, 1);           // white pixel correction ON
+      s->set_dcw(s, 1);           // downsize/crop weighting ON
+      s->set_raw_gma(s, 1);       // raw gamma ON (more natural tones)
+      s->set_exposure_ctrl(s, 1); // enable exposure control (required for auto exposure to work)
+      s->set_lenc(s, 1);          // lens correction ON
     }
     return true;
   }
@@ -142,7 +148,7 @@ namespace CameraService
 {
   bool initLive()
   {
-    return initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, false, XCLK_FREQ_HZ);
+    return initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, XCLK_FREQ_HZ);
   }
 
   bool capturePhotoToJpg(bool filterEnabled,
@@ -153,10 +159,10 @@ namespace CameraService
   {
     esp_camera_deinit();
 
-    if (!initCamera(CAPTURE_PIXEL_FORMAT, CAPTURE_FRAME_SIZE, true, CAPTURE_XCLK_FREQ_HZ))
+    if (!initCamera(CAPTURE_PIXEL_FORMAT, CAPTURE_FRAME_SIZE, CAPTURE_XCLK_FREQ_HZ))
     {
       Serial.println("Failed to init capture mode");
-      initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, false, XCLK_FREQ_HZ);
+      initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, XCLK_FREQ_HZ);
       return false;
     }
 
@@ -173,7 +179,7 @@ namespace CameraService
     {
       Serial.println("Photo capture failed");
       esp_camera_deinit();
-      initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, false, XCLK_FREQ_HZ);
+      initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, XCLK_FREQ_HZ);
       return false;
     }
 
@@ -187,7 +193,7 @@ namespace CameraService
 
     esp_camera_fb_return(fb);
     esp_camera_deinit();
-    initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, false, XCLK_FREQ_HZ);
+    initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, XCLK_FREQ_HZ);
     return true;
   }
 
