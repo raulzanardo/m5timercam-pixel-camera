@@ -15,18 +15,11 @@
 
 #include "config.h"
 #include "camera.h"
+#include "ui.h"
 #include "web.h"
 
 U8G2_SSD1306_64X32_1F_F_HW_I2C display(U8G2_R0, /* reset=*/U8X8_PIN_NONE);
 OneButton button(BUTTON_PIN, true, false);
-
-enum class MenuItem
-{
-    Off,
-    Export,
-    ToggleFilter,
-    Status,
-};
 
 bool inMenu = false;
 size_t menuIndex = 0;
@@ -81,193 +74,6 @@ void enterDeepSleep()
     esp_deep_sleep_start();
 }
 
-void renderMenu()
-{
-    display.clearBuffer();
-    display.setFont(u8g2_font_5x8_mf);
-    display.drawFrame(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-
-    // Highlight current item with a light banner near the top (using freed space)
-    display.drawBox(1, 3, SCREEN_WIDTH - 2, 10);
-    display.setDrawColor(0); // invert inside banner
-    display.drawStr(3, 11, MENU_LABEL(menuIndex));
-    display.setDrawColor(1);
-
-    // Show state hints
-    switch (static_cast<MenuItem>(menuIndex))
-    {
-    case MenuItem::Off:
-    {
-        char state[16];
-        snprintf(state, sizeof(state), "state:%s", isOff ? "off" : "on");
-        display.setFont(u8g2_font_5x8_mf);
-        display.drawStr(2, 31, state);
-        break;
-    }
-    case MenuItem::Export:
-    {
-        display.setFont(u8g2_font_5x8_mf);
-        char ipLine1[18];
-        char ipLine2[18];
-        if (WebExport::isWifiReady())
-        {
-            String ip = WebExport::localIP();
-            int firstDot = ip.indexOf('.');
-            int secondDot = firstDot >= 0 ? ip.indexOf('.', firstDot + 1) : -1;
-            if (secondDot > 0)
-            {
-                ip.substring(0, secondDot).toCharArray(ipLine1, sizeof(ipLine1));
-                ip.substring(secondDot + 1).toCharArray(ipLine2, sizeof(ipLine2));
-            }
-            else
-            {
-                size_t len = ip.length();
-                size_t mid = len / 2;
-                ip.substring(0, mid).toCharArray(ipLine1, sizeof(ipLine1));
-                ip.substring(mid).toCharArray(ipLine2, sizeof(ipLine2));
-            }
-        }
-        else
-        {
-            snprintf(ipLine1, sizeof(ipLine1), "--");
-            snprintf(ipLine2, sizeof(ipLine2), "");
-        }
-        display.drawStr(2, 20, ipLine1);
-        display.drawStr(2, 31, ipLine2);
-        break;
-    }
-    case MenuItem::ToggleFilter:
-    {
-        char state[16];
-        snprintf(state, sizeof(state), "state:%s", filterEnabled ? "on" : "off");
-        display.setFont(u8g2_font_5x8_mf);
-        display.drawStr(2, 31, state);
-        break;
-    }
-    case MenuItem::Status:
-    {
-        // Use smaller font to fit more info
-        display.setFont(u8g2_font_5x8_mf);
-        size_t fsFreeKB = 0;
-        if (littlefsReady)
-        {
-            size_t fsTotal = LittleFS.totalBytes();
-            size_t fsUsed = LittleFS.usedBytes();
-            fsFreeKB = (fsTotal > fsUsed) ? (fsTotal - fsUsed) / 1024 : 0;
-        }
-        int batteryPct = TimerCAM.Power.getBatteryLevel();
-        char line1[22];
-        snprintf(line1, sizeof(line1), "bat:%d%%", batteryPct);
-        display.drawStr(2, 23, line1);
-        char line2[18];
-        if (littlefsReady)
-        {
-            snprintf(line2, sizeof(line2), "fs:%luk", static_cast<unsigned long>(fsFreeKB));
-        }
-        else
-        {
-            snprintf(line2, sizeof(line2), "fs:err");
-        }
-        display.drawStr(2, 31, line2);
-        lastStatusRefreshMs = millis();
-        break;
-    }
-    }
-    display.sendBuffer();
-}
-
-void handleAction(MenuItem item)
-{
-    switch (item)
-    {
-    case MenuItem::Off:
-        display.clearBuffer();
-        display.setFont(u8g2_font_5x8_mf);
-        display.drawFrame(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-        display.drawStr(2, 12, "Shutting down");
-        display.sendBuffer();
-        delay(600);
-
-        enterDeepSleep();
-        break; // not reached
-    case MenuItem::Export:
-        // Show connecting state while Wi-Fi is being established
-        display.clearBuffer();
-        display.setFont(u8g2_font_5x8_mf);
-        display.drawFrame(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-        display.drawStr(2, 12, "connecting...");
-        display.sendBuffer();
-
-        WebExport::start();
-        renderMenu(); // refresh to show IP if connected
-        break;
-    case MenuItem::ToggleFilter:
-        filterEnabled = !filterEnabled;
-        preferences.putBool("filter_enabled", filterEnabled);
-        break;
-    case MenuItem::Status:
-        // no toggle; just refresh
-        break;
-    }
-    // stay in menu to keep navigating
-    renderMenu();
-}
-
-void handleClick()
-{
-    if (inMenu)
-    {
-        menuIndex = (menuIndex + 1) % MENU_COUNT;
-        renderMenu();
-        return;
-    }
-
-    // Show immediate feedback before capture starts
-    TimerCAM.Power.setLed(PHOTO_LED_BRIGHTNESS);
-    photoBlinkActive = true;
-    photoBlinkUntilMs = millis() + PHOTO_LED_DURATION_MS;
-
-    // Show processing message
-    display.clearBuffer();
-    display.setFont(u8g2_font_5x8_mf);
-    display.drawFrame(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-    display.drawStr(2, 18, "processing...");
-    display.sendBuffer();
-
-    // Take photo (this is the slow part)
-    CameraService::capturePhotoToJpg(filterEnabled, littlefsReady, photoCounter, preferencesReady, preferences);
-
-    // Show completion toast after capture
-    showToast = true;
-    toastUntilMs = millis() + TOAST_DURATION_MS;
-    display.clearBuffer();
-    display.setFont(u8g2_font_5x8_mf);
-    display.drawFrame(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-    display.drawStr(5, 18, "photo saved");
-    display.sendBuffer();
-}
-
-void handleDoubleClick()
-{
-    if (inMenu)
-    {
-        inMenu = false;
-    }
-}
-
-void handleLongPress()
-{
-    if (!inMenu)
-    {
-        inMenu = true;
-        menuIndex = 0;
-        lastStatusRefreshMs = 0;
-        renderMenu();
-        return;
-    }
-    handleAction(static_cast<MenuItem>(menuIndex));
-}
-
 void setup()
 {
     WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // disable detector
@@ -298,9 +104,9 @@ void setup()
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     button.setDebounceMs(30);
     button.setPressMs(700);
-    button.attachClick(handleClick);
-    button.attachDoubleClick(handleDoubleClick);
-    button.attachLongPressStart(handleLongPress);
+    button.attachClick(Ui::handleClick);
+    button.attachDoubleClick(Ui::handleDoubleClick);
+    button.attachLongPressStart(Ui::handleLongPress);
 
     preferencesReady = preferences.begin("photos", false);
     if (!preferencesReady)
@@ -312,6 +118,22 @@ void setup()
         photoCounter = preferences.getUInt("photo_idx", 0);
         filterEnabled = preferences.getBool("filter_enabled", false);
     }
+
+    Ui::init(display,
+             inMenu,
+             menuIndex,
+             isOff,
+             filterEnabled,
+             littlefsReady,
+             showToast,
+             toastUntilMs,
+             lastStatusRefreshMs,
+             photoBlinkActive,
+             photoBlinkUntilMs,
+             preferences,
+             preferencesReady,
+             photoCounter,
+             enterDeepSleep);
 
     // Ensure photoCounter is absolute to avoid overwriting older photos
     if (littlefsReady)
@@ -401,12 +223,12 @@ void loop()
     if (inMenu)
     {
         WebExport::poll();
-        if (static_cast<MenuItem>(menuIndex) == MenuItem::Status)
+        if (Ui::isStatusSelected())
         {
             const uint32_t now = millis();
             if (now - lastStatusRefreshMs >= STATUS_REFRESH_MS)
             {
-                renderMenu();
+                Ui::renderMenu();
             }
         }
         return;
