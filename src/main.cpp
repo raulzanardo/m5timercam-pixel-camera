@@ -823,7 +823,8 @@ void setup()
     // }
 
     display.begin();
-    display.setPowerSave(0); // wake OLED after init
+    display.setPowerSave(0);  // wake OLED after init
+    display.setContrast(255); // max contrast for sharper image (can be adjusted down to save power)
     display.setDisplayRotation(U8G2_R2);
     display.clearBuffer();
     display.setFont(u8g2_font_6x10_mf);

@@ -7,5 +7,6 @@
 #define SCREEN_ADDRESS 0x3C // I2C address
 #define BUTTON_PIN 37       // External button pin
 
+// Wi-Fi credentials for export server
 constexpr char WIFI_SSID[] = "YOUR_SSID";
 constexpr char WIFI_PASSWORD[] = "YOUR_PASSWORD";
