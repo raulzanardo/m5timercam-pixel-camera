@@ -103,7 +103,7 @@ namespace
     return true;
   }
 
-  bool saveJpgToSpiffs(camera_fb_t *fb, bool littlefsReady, uint32_t &photoCounter, bool preferencesReady, Preferences &preferences)
+  bool saveJpgToSpiffs(camera_fb_t *fb, bool isAlreadyJpeg, bool littlefsReady, uint32_t &photoCounter, bool preferencesReady, Preferences &preferences)
   {
     if (!littlefsReady || fb == nullptr)
     {
@@ -111,9 +111,12 @@ namespace
       return false;
     }
 
-    if (!LittleFS.exists("/photos"))
+    static bool photosDirReady = false;
+    if (!photosDirReady)
     {
-      LittleFS.mkdir("/photos");
+      if (!LittleFS.exists("/photos"))
+        LittleFS.mkdir("/photos");
+      photosDirReady = true;
     }
 
     char path[48];
@@ -126,13 +129,18 @@ namespace
       return false;
     }
 
-    fmt2jpg_cb(reinterpret_cast<uint8_t *>(fb->buf), fb->len, fb->width, fb->height, PIXFORMAT_RGB565, 100, [](void *arg, size_t index, const void *data, size_t len) -> size_t
-               {
-                   fs::File *f = reinterpret_cast<fs::File *>(arg);
-                   size_t written = f->write(reinterpret_cast<const uint8_t *>(data), len);
-                   return written; }, &file);
+    if (isAlreadyJpeg)
+    {
+      file.write(fb->buf, fb->len);
+    }
+    else
+    {
+      fmt2jpg_cb(reinterpret_cast<uint8_t *>(fb->buf), fb->len, fb->width, fb->height, PIXFORMAT_RGB565, JPG_ENCODE_QUALITY, [](void *arg, size_t index, const void *data, size_t len) -> size_t
+                 {
+                     fs::File *f = reinterpret_cast<fs::File *>(arg);
+                     return f->write(reinterpret_cast<const uint8_t *>(data), len); }, &file);
+    }
 
-    file.flush();
     file.close();
     photoCounter++;
     if (preferencesReady)
@@ -159,19 +167,31 @@ namespace CameraService
   {
     esp_camera_deinit();
 
-    if (!initCamera(CAPTURE_PIXEL_FORMAT, CAPTURE_FRAME_SIZE, CAPTURE_XCLK_FREQ_HZ))
+    // Without a filter we can use hardware JPEG — OV2640 encodes on-sensor,
+    // skipping the expensive software fmt2jpg_cb pass.
+    const pixformat_t capFmt = filterEnabled ? CAPTURE_PIXEL_FORMAT : PIXFORMAT_JPEG;
+
+    if (!initCamera(capFmt, CAPTURE_FRAME_SIZE, CAPTURE_XCLK_FREQ_HZ))
     {
       Serial.println("Failed to init capture mode");
       initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, XCLK_FREQ_HZ);
       return false;
     }
 
-    for (int i = 0; i < 2; ++i)
+    if (!filterEnabled)
+    {
+      // Set hardware JPEG quality on the sensor
+      sensor_t *s = esp_camera_sensor_get();
+      if (s)
+        s->set_quality(s, CAPTURE_SENSOR_JPEG_QUALITY);
+    }
+
+    for (int i = 0; i < CAPTURE_WARMUP_FRAMES; ++i)
     {
       camera_fb_t *warm = esp_camera_fb_get();
       if (warm)
         esp_camera_fb_return(warm);
-      delay(40);
+      delay(CAPTURE_WARMUP_DELAY_MS);
     }
 
     camera_fb_t *fb = esp_camera_fb_get();
@@ -189,7 +209,7 @@ namespace CameraService
       applyPicoPalette(fb);
     }
 
-    saveJpgToSpiffs(fb, littlefsReady, photoCounter, preferencesReady, preferences);
+    saveJpgToSpiffs(fb, !filterEnabled, littlefsReady, photoCounter, preferencesReady, preferences);
 
     esp_camera_fb_return(fb);
     esp_camera_deinit();

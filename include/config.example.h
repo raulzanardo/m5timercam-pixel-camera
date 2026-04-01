@@ -43,3 +43,4 @@
 #define CAPTURE_WARMUP_FRAMES 1
 #define CAPTURE_WARMUP_DELAY_MS 12
 #define JPG_ENCODE_QUALITY 80
+#define CAPTURE_SENSOR_JPEG_QUALITY 10 // OV2640 hardware JPEG quality (0-63, lower=better)
