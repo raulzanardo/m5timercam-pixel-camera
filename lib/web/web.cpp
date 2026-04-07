@@ -171,9 +171,9 @@ namespace
 
     std::sort(photos.begin(), photos.end(), [](const PhotoEntry &a, const PhotoEntry &b)
               {
-        if (a.idx != b.idx)
-            return a.idx < b.idx;
-        return a.name < b.name; });
+      if (a.idx != b.idx)
+        return a.idx > b.idx;
+      return a.name > b.name; });
 
     const uint32_t photoCount = static_cast<uint32_t>(photos.size());
 

@@ -247,31 +247,28 @@ namespace CameraService
     {
       for (int x = 0; x < SCREEN_WIDTH; x++)
       {
-        int16_t oldPixel = buffer[y][x];
-        int16_t newPixel = (oldPixel > 128) ? 255 : 0;
+        const int16_t oldPixel = constrain(static_cast<int>(buffer[y][x]), 0, 255);
+        const int16_t newPixel = (oldPixel >= 128) ? 255 : 0;
 
-        if (newPixel > 128)
+        if (newPixel == 255)
         {
           display.drawPixel(x, y);
         }
 
-        int16_t error = oldPixel - newPixel;
+        const int16_t error = oldPixel - newPixel;
 
         if (x + 1 < SCREEN_WIDTH)
         {
-          buffer[y][x + 1] += (error * 7) / 16;
+          buffer[y][x + 1] += static_cast<int16_t>(error >> 1);
         }
+
         if (y + 1 < SCREEN_HEIGHT)
         {
           if (x > 0)
           {
-            buffer[y + 1][x - 1] += (error * 3) / 16;
+            buffer[y + 1][x - 1] += static_cast<int16_t>(error >> 2);
           }
-          buffer[y + 1][x] += (error * 5) / 16;
-          if (x + 1 < SCREEN_WIDTH)
-          {
-            buffer[y + 1][x + 1] += error / 16;
-          }
+          buffer[y + 1][x] += static_cast<int16_t>(error >> 2);
         }
       }
     }
