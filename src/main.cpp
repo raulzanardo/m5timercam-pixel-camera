@@ -23,6 +23,7 @@ OneButton button(BUTTON_PIN, true, false);
 
 bool inMenu = false;
 size_t menuIndex = 0;
+bool statusModeActive = false;
 bool isOff = false;
 bool filterEnabled = false;
 bool littlefsReady = false;
@@ -122,6 +123,7 @@ void setup()
     Ui::init(display,
              inMenu,
              menuIndex,
+             statusModeActive,
              isOff,
              filterEnabled,
              littlefsReady,
@@ -223,7 +225,7 @@ void loop()
     if (inMenu)
     {
         WebExport::poll();
-        if (Ui::isStatusSelected())
+        if (Ui::isStatusModeActive())
         {
             const uint32_t now = millis();
             if (now - lastStatusRefreshMs >= STATUS_REFRESH_MS)

@@ -12,6 +12,7 @@ namespace
   U8G2_SSD1306_64X32_1F_F_HW_I2C *g_display = nullptr;
   bool *g_inMenu = nullptr;
   size_t *g_menuIndex = nullptr;
+  bool *g_statusModeActive = nullptr;
   bool *g_isOff = nullptr;
   bool *g_filterEnabled = nullptr;
   bool *g_littlefsReady = nullptr;
@@ -32,6 +33,115 @@ namespace
     ToggleFilter,
     Status,
   };
+
+  bool isToggleItem(MenuItem item)
+  {
+    return item == MenuItem::ToggleFilter;
+  }
+
+  const char *toggleStateLabel(MenuItem item)
+  {
+    switch (item)
+    {
+    case MenuItem::ToggleFilter:
+      return *g_filterEnabled ? "on" : "off";
+    default:
+      return nullptr;
+    }
+  }
+
+  void splitIpForDisplay(char *line1, size_t line1Size, char *line2, size_t line2Size)
+  {
+    if (!WebExport::isWifiReady())
+    {
+      snprintf(line1, line1Size, "");
+      snprintf(line2, line2Size, "");
+      return;
+    }
+
+    String ip = WebExport::localIP();
+    int firstDot = ip.indexOf('.');
+    int secondDot = firstDot >= 0 ? ip.indexOf('.', firstDot + 1) : -1;
+    if (secondDot > 0)
+    {
+      ip.substring(0, secondDot).toCharArray(line1, line1Size);
+      ip.substring(secondDot + 1).toCharArray(line2, line2Size);
+      return;
+    }
+
+    size_t len = ip.length();
+    size_t mid = len / 2;
+    ip.substring(0, mid).toCharArray(line1, line1Size);
+    ip.substring(mid).toCharArray(line2, line2Size);
+  }
+
+  void formatFreeSpace(char *buffer, size_t bufferSize)
+  {
+    if (!*g_littlefsReady)
+    {
+      snprintf(buffer, bufferSize, "free:err");
+      return;
+    }
+
+    const size_t totalBytes = LittleFS.totalBytes();
+    const size_t usedBytes = LittleFS.usedBytes();
+    const size_t freeBytes = (totalBytes > usedBytes) ? (totalBytes - usedBytes) : 0;
+    const float freeMegabytes = static_cast<float>(freeBytes) / (1024.0f * 1024.0f);
+
+    if (freeMegabytes >= 10.0f)
+    {
+      snprintf(buffer, bufferSize, "free:%.0fMB", freeMegabytes);
+      return;
+    }
+
+    snprintf(buffer, bufferSize, "free:%.1fMB", freeMegabytes);
+  }
+
+  void renderStatusScreen()
+  {
+    g_display->clearBuffer();
+    g_display->setFont(u8g2_font_5x8_mf);
+
+    const int batteryPct = TimerCAM.Power.getBatteryLevel();
+    char batteryLine[18];
+    char freeLine[18];
+
+    snprintf(batteryLine, sizeof(batteryLine), "bat:%d%%", batteryPct);
+    formatFreeSpace(freeLine, sizeof(freeLine));
+
+    g_display->drawStr(2, 12, batteryLine);
+    g_display->drawStr(2, 24, freeLine);
+    g_display->sendBuffer();
+    *g_lastStatusRefreshMs = millis();
+  }
+
+  void drawMenuRow(uint8_t row, MenuItem item, bool selected)
+  {
+    const uint8_t rowHeight = 8;
+    const uint8_t rowY = row * rowHeight;
+    const uint8_t textY = rowY + 7;
+
+    if (selected)
+    {
+      g_display->drawBox(0, rowY, SCREEN_WIDTH, rowHeight);
+      g_display->setDrawColor(0);
+    }
+
+    g_display->drawStr(2, textY, MENU_LABEL(static_cast<size_t>(item)));
+
+    if (isToggleItem(item))
+    {
+      const char *state = toggleStateLabel(item);
+      const uint8_t stateWidth = g_display->getStrWidth(state);
+      const uint8_t stateX = SCREEN_WIDTH - stateWidth - 2;
+      g_display->drawStr(stateX, textY, state);
+    }
+
+    if (selected)
+    {
+      g_display->setDrawColor(1);
+    }
+  }
 
   void handleAction(MenuItem item)
   {
@@ -68,6 +178,7 @@ namespace
       }
       break;
     case MenuItem::Status:
+      *g_statusModeActive = true;
       break;
     }
 
@@ -80,6 +191,7 @@ namespace Ui
   void init(U8G2_SSD1306_64X32_1F_F_HW_I2C &display,
             bool &inMenu,
             size_t &menuIndex,
+            bool &statusModeActive,
             bool &isOff,
             bool &filterEnabled,
             bool &littlefsReady,
@@ -96,6 +208,7 @@ namespace Ui
     g_display = &display;
     g_inMenu = &inMenu;
     g_menuIndex = &menuIndex;
+    g_statusModeActive = &statusModeActive;
     g_isOff = &isOff;
     g_filterEnabled = &filterEnabled;
     g_littlefsReady = &littlefsReady;
@@ -112,93 +225,34 @@ namespace Ui
 
   void renderMenu()
   {
-    g_display->clearBuffer();
-    g_display->setFont(u8g2_font_5x8_mf);
-    g_display->drawFrame(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-
-    g_display->drawBox(1, 3, SCREEN_WIDTH - 2, 10);
-    g_display->setDrawColor(0);
-    g_display->drawStr(3, 11, MENU_LABEL(*g_menuIndex));
-    g_display->setDrawColor(1);
-
-    switch (static_cast<MenuItem>(*g_menuIndex))
+    if (WebExport::isActive())
     {
-    case MenuItem::Off:
-    {
-      char state[16];
-      snprintf(state, sizeof(state), "state:%s", *g_isOff ? "off" : "on");
+      g_display->clearBuffer();
       g_display->setFont(u8g2_font_5x8_mf);
-      g_display->drawStr(2, 31, state);
-      break;
-    }
-    case MenuItem::Export:
-    {
-      g_display->setFont(u8g2_font_5x8_mf);
+
       char ipLine1[18];
       char ipLine2[18];
-      if (WebExport::isWifiReady())
-      {
-        String ip = WebExport::localIP();
-        int firstDot = ip.indexOf('.');
-        int secondDot = firstDot >= 0 ? ip.indexOf('.', firstDot + 1) : -1;
-        if (secondDot > 0)
-        {
-          ip.substring(0, secondDot).toCharArray(ipLine1, sizeof(ipLine1));
-          ip.substring(secondDot + 1).toCharArray(ipLine2, sizeof(ipLine2));
-        }
-        else
-        {
-          size_t len = ip.length();
-          size_t mid = len / 2;
-          ip.substring(0, mid).toCharArray(ipLine1, sizeof(ipLine1));
-          ip.substring(mid).toCharArray(ipLine2, sizeof(ipLine2));
-        }
-      }
-      else
-      {
-        snprintf(ipLine1, sizeof(ipLine1), "--");
-        snprintf(ipLine2, sizeof(ipLine2), "");
-      }
-      g_display->drawStr(2, 20, ipLine1);
-      g_display->drawStr(2, 31, ipLine2);
-      break;
+      splitIpForDisplay(ipLine1, sizeof(ipLine1), ipLine2, sizeof(ipLine2));
+      g_display->drawStr(2, 14, ipLine1);
+      g_display->drawStr(2, 24, ipLine2);
+      g_display->sendBuffer();
+      return;
     }
-    case MenuItem::ToggleFilter:
+
+    if (*g_statusModeActive)
     {
-      char state[16];
-      snprintf(state, sizeof(state), "state:%s", *g_filterEnabled ? "on" : "off");
-      g_display->setFont(u8g2_font_5x8_mf);
-      g_display->drawStr(2, 31, state);
-      break;
+      renderStatusScreen();
+      return;
     }
-    case MenuItem::Status:
+
+    g_display->clearBuffer();
+    g_display->setFont(u8g2_font_5x8_mf);
+    for (size_t index = 0; index < MENU_COUNT; ++index)
     {
-      g_display->setFont(u8g2_font_5x8_mf);
-      size_t fsFreeKB = 0;
-      if (*g_littlefsReady)
-      {
-        size_t fsTotal = LittleFS.totalBytes();
-        size_t fsUsed = LittleFS.usedBytes();
-        fsFreeKB = (fsTotal > fsUsed) ? (fsTotal - fsUsed) / 1024 : 0;
-      }
-      int batteryPct = TimerCAM.Power.getBatteryLevel();
-      char line1[22];
-      snprintf(line1, sizeof(line1), "bat:%d%%", batteryPct);
-      g_display->drawStr(2, 23, line1);
-      char line2[18];
-      if (*g_littlefsReady)
-      {
-        snprintf(line2, sizeof(line2), "fs:%luk", static_cast<unsigned long>(fsFreeKB));
-      }
-      else
-      {
-        snprintf(line2, sizeof(line2), "fs:err");
-      }
-      g_display->drawStr(2, 31, line2);
-      *g_lastStatusRefreshMs = millis();
-      break;
+      const MenuItem item = static_cast<MenuItem>(index);
+      drawMenuRow(static_cast<uint8_t>(index), item, index == *g_menuIndex);
     }
-    }
+
     g_display->sendBuffer();
   }
 
@@ -206,6 +260,12 @@ namespace Ui
   {
     if (*g_inMenu)
     {
+      if (WebExport::isActive() || *g_statusModeActive)
+      {
+        renderMenu();
+        return;
+      }
+
       *g_menuIndex = (*g_menuIndex + 1) % MENU_COUNT;
       renderMenu();
       return;
@@ -236,6 +296,7 @@ namespace Ui
   {
     if (*g_inMenu)
     {
+      *g_statusModeActive = false;
       *g_inMenu = false;
     }
   }
@@ -246,15 +307,28 @@ namespace Ui
     {
       *g_inMenu = true;
       *g_menuIndex = 0;
+      *g_statusModeActive = false;
       *g_lastStatusRefreshMs = 0;
       renderMenu();
       return;
     }
+
+    if (WebExport::isActive() || *g_statusModeActive)
+    {
+      renderMenu();
+      return;
+    }
+
     handleAction(static_cast<MenuItem>(*g_menuIndex));
   }
 
   bool isStatusSelected()
   {
     return static_cast<MenuItem>(*g_menuIndex) == MenuItem::Status;
+  }
+
+  bool isStatusModeActive()
+  {
+    return *g_statusModeActive;
   }
 } // namespace Ui

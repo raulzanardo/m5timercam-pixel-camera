@@ -9,6 +9,7 @@ namespace Ui
   void init(U8G2_SSD1306_64X32_1F_F_HW_I2C &display,
             bool &inMenu,
             size_t &menuIndex,
+            bool &statusModeActive,
             bool &isOff,
             bool &filterEnabled,
             bool &littlefsReady,
@@ -27,4 +28,5 @@ namespace Ui
   void handleDoubleClick();
   void handleLongPress();
   bool isStatusSelected();
+  bool isStatusModeActive();
 } // namespace Ui
