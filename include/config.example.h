@@ -15,17 +15,21 @@
 #define MENU_LABEL_OFF "off"
 #define MENU_LABEL_EXPORT "export"
 #define MENU_LABEL_FILTER "filter"
+#define MENU_LABEL_WAKE "wake"
 #define MENU_LABEL_STATUS "status"
-#define MENU_COUNT 4
+#define MENU_COUNT 5
 
 // Returns a string literal for the selected menu index
 #define MENU_LABEL(index) ((index) == 0 ? MENU_LABEL_OFF : (index) == 1 ? MENU_LABEL_EXPORT \
                                                        : (index) == 2   ? MENU_LABEL_FILTER \
+                                                       : (index) == 3   ? MENU_LABEL_WAKE   \
                                                                         : MENU_LABEL_STATUS)
 
 // Timing/power/camera constants
 #define TOAST_DURATION_MS 800
 #define STATUS_REFRESH_MS 5000
+#define WAKE_CAPTURE_SLEEP_DELAY_MS 5000
+#define WAKE_CAPTURE_IGNORE_INPUT_MS 750
 #define PHOTO_LED_BRIGHTNESS 80 // lower brightness to cut LED draw (10-bit duty)
 #define PHOTO_LED_DURATION_MS 150
 #define CPU_FREQ_LOW_MHZ 80

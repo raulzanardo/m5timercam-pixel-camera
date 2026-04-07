@@ -12,6 +12,7 @@ namespace Ui
             bool &statusModeActive,
             bool &isOff,
             bool &filterEnabled,
+            bool &wakeShotEnabled,
             bool &littlefsReady,
             bool &showToast,
             uint32_t &toastUntilMs,

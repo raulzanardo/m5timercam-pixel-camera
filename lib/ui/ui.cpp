@@ -15,6 +15,7 @@ namespace
   bool *g_statusModeActive = nullptr;
   bool *g_isOff = nullptr;
   bool *g_filterEnabled = nullptr;
+  bool *g_wakeShotEnabled = nullptr;
   bool *g_littlefsReady = nullptr;
   bool *g_showToast = nullptr;
   uint32_t *g_toastUntilMs = nullptr;
@@ -31,12 +32,13 @@ namespace
     Off,
     Export,
     ToggleFilter,
+    ToggleWakeShot,
     Status,
   };
 
   bool isToggleItem(MenuItem item)
   {
-    return item == MenuItem::ToggleFilter;
+    return item == MenuItem::ToggleFilter || item == MenuItem::ToggleWakeShot;
   }
 
   const char *toggleStateLabel(MenuItem item)
@@ -45,6 +47,8 @@ namespace
     {
     case MenuItem::ToggleFilter:
       return *g_filterEnabled ? "on" : "off";
+    case MenuItem::ToggleWakeShot:
+      return *g_wakeShotEnabled ? "on" : "off";
     default:
       return nullptr;
     }
@@ -177,6 +181,13 @@ namespace
         g_preferences->putBool("filter_enabled", *g_filterEnabled);
       }
       break;
+    case MenuItem::ToggleWakeShot:
+      *g_wakeShotEnabled = !*g_wakeShotEnabled;
+      if (*g_preferencesReady)
+      {
+        g_preferences->putBool("wake_shot", *g_wakeShotEnabled);
+      }
+      break;
     case MenuItem::Status:
       *g_statusModeActive = true;
       break;
@@ -194,6 +205,7 @@ namespace Ui
             bool &statusModeActive,
             bool &isOff,
             bool &filterEnabled,
+            bool &wakeShotEnabled,
             bool &littlefsReady,
             bool &showToast,
             uint32_t &toastUntilMs,
@@ -211,6 +223,7 @@ namespace Ui
     g_statusModeActive = &statusModeActive;
     g_isOff = &isOff;
     g_filterEnabled = &filterEnabled;
+    g_wakeShotEnabled = &wakeShotEnabled;
     g_littlefsReady = &littlefsReady;
     g_showToast = &showToast;
     g_toastUntilMs = &toastUntilMs;
@@ -247,10 +260,18 @@ namespace Ui
 
     g_display->clearBuffer();
     g_display->setFont(u8g2_font_5x8_mf);
-    for (size_t index = 0; index < MENU_COUNT; ++index)
+    const uint8_t maxVisibleRows = SCREEN_HEIGHT / 8;
+    size_t firstVisibleIndex = 0;
+    if (*g_menuIndex >= maxVisibleRows)
+    {
+      firstVisibleIndex = *g_menuIndex - maxVisibleRows + 1;
+    }
+
+    const size_t lastVisibleIndex = min(firstVisibleIndex + maxVisibleRows, static_cast<size_t>(MENU_COUNT));
+    for (size_t index = firstVisibleIndex; index < lastVisibleIndex; ++index)
     {
       const MenuItem item = static_cast<MenuItem>(index);
-      drawMenuRow(static_cast<uint8_t>(index), item, index == *g_menuIndex);
+      drawMenuRow(static_cast<uint8_t>(index - firstVisibleIndex), item, index == *g_menuIndex);
     }
 
     g_display->sendBuffer();

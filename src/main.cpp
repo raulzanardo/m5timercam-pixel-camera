@@ -26,18 +26,99 @@ size_t menuIndex = 0;
 bool statusModeActive = false;
 bool isOff = false;
 bool filterEnabled = false;
+bool wakeShotEnabled = false;
 bool littlefsReady = false;
 bool showToast = false;
 uint32_t toastUntilMs = 0;
 uint32_t lastStatusRefreshMs = 0;
 bool photoBlinkActive = false;
 uint32_t photoBlinkUntilMs = 0;
+bool wakeAutoSleepPending = false;
+uint32_t wakeAutoSleepDeadlineMs = 0;
+uint32_t wakeAutoSleepIgnoreInputUntilMs = 0;
 Preferences preferences;
 bool preferencesReady = false;
 uint32_t photoCounter = 0;
 bool timerPowerReady = false; // tracks TimerCAM.begin success for power features
 
 static int16_t ditherBuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
+
+bool shouldRescanPhotoIndex()
+{
+    return littlefsReady && (!preferencesReady || photoCounter == 0);
+}
+
+void cancelWakeAutoSleep()
+{
+    wakeAutoSleepPending = false;
+    wakeAutoSleepDeadlineMs = 0;
+    wakeAutoSleepIgnoreInputUntilMs = 0;
+}
+
+bool shouldIgnoreWakeAction()
+{
+    return wakeAutoSleepPending && millis() < wakeAutoSleepIgnoreInputUntilMs;
+}
+
+void handleButtonClick()
+{
+    if (shouldIgnoreWakeAction())
+    {
+        return;
+    }
+
+    cancelWakeAutoSleep();
+    Ui::handleClick();
+}
+
+void handleButtonDoubleClick()
+{
+    if (shouldIgnoreWakeAction())
+    {
+        return;
+    }
+
+    cancelWakeAutoSleep();
+    Ui::handleDoubleClick();
+}
+
+void handleButtonLongPress()
+{
+    if (shouldIgnoreWakeAction())
+    {
+        return;
+    }
+
+    cancelWakeAutoSleep();
+    Ui::handleLongPress();
+}
+
+void runWakeShotCapture()
+{
+    TimerCAM.Power.setLed(PHOTO_LED_BRIGHTNESS);
+    photoBlinkActive = true;
+    photoBlinkUntilMs = millis() + PHOTO_LED_DURATION_MS;
+
+    display.clearBuffer();
+    display.setFont(u8g2_font_5x8_mf);
+    display.drawFrame(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    display.drawStr(2, 18, "processing...");
+    display.sendBuffer();
+
+    const bool saved = CameraService::capturePhotoToJpg(filterEnabled, littlefsReady, photoCounter, preferencesReady, preferences);
+
+    showToast = true;
+    toastUntilMs = millis() + TOAST_DURATION_MS;
+    display.clearBuffer();
+    display.setFont(u8g2_font_5x8_mf);
+    display.drawFrame(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    display.drawStr(5, 18, saved ? "photo saved" : "photo error");
+    display.sendBuffer();
+
+    wakeAutoSleepPending = true;
+    wakeAutoSleepDeadlineMs = millis() + WAKE_CAPTURE_SLEEP_DELAY_MS;
+    wakeAutoSleepIgnoreInputUntilMs = millis() + WAKE_CAPTURE_IGNORE_INPUT_MS;
+}
 
 void enterDeepSleep()
 {
@@ -78,9 +159,9 @@ void enterDeepSleep()
 void setup()
 {
     WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // disable detector
+    const esp_sleep_wakeup_cause_t wakeupCause = esp_sleep_get_wakeup_cause();
 
     Serial.begin(115200);
-    delay(150);
     Serial.println();
     Serial.printf("reset_reason:%d\n", static_cast<int>(esp_reset_reason()));
     // delay(2000);
@@ -105,9 +186,9 @@ void setup()
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     button.setDebounceMs(30);
     button.setPressMs(700);
-    button.attachClick(Ui::handleClick);
-    button.attachDoubleClick(Ui::handleDoubleClick);
-    button.attachLongPressStart(Ui::handleLongPress);
+    button.attachClick(handleButtonClick);
+    button.attachDoubleClick(handleButtonDoubleClick);
+    button.attachLongPressStart(handleButtonLongPress);
 
     preferencesReady = preferences.begin("photos", false);
     if (!preferencesReady)
@@ -118,7 +199,10 @@ void setup()
     {
         photoCounter = preferences.getUInt("photo_idx", 0);
         filterEnabled = preferences.getBool("filter_enabled", false);
+        wakeShotEnabled = preferences.getBool("wake_shot", false);
     }
+
+    const bool wakeShotBoot = wakeShotEnabled && wakeupCause == ESP_SLEEP_WAKEUP_EXT0;
 
     Ui::init(display,
              inMenu,
@@ -126,6 +210,7 @@ void setup()
              statusModeActive,
              isOff,
              filterEnabled,
+             wakeShotEnabled,
              littlefsReady,
              showToast,
              toastUntilMs,
@@ -138,7 +223,7 @@ void setup()
              enterDeepSleep);
 
     // Ensure photoCounter is absolute to avoid overwriting older photos
-    if (littlefsReady)
+    if (shouldRescanPhotoIndex())
     {
         if (!LittleFS.exists("/photos"))
         {
@@ -176,6 +261,10 @@ void setup()
             preferences.putUInt("photo_idx", photoCounter);
         }
     }
+    else if (littlefsReady && !LittleFS.exists("/photos"))
+    {
+        LittleFS.mkdir("/photos");
+    }
 
     // if (!TimerCAM.Camera.begin())
     // {
@@ -188,12 +277,12 @@ void setup()
     display.setPowerSave(0);  // wake OLED after init
     display.setContrast(255); // max contrast for sharper image (can be adjusted down to save power)
     display.setDisplayRotation(U8G2_R2);
-    display.clearBuffer();
-    display.setFont(u8g2_font_6x10_mf);
-    display.drawFrame(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-    display.drawStr(10, 12, "Start");
 
-    display.sendBuffer(); // transfer internal memory to the display
+    if (wakeShotBoot)
+    {
+        runWakeShotCapture();
+        return;
+    }
 
     if (!CameraService::initLive())
     {
@@ -219,6 +308,12 @@ void loop()
     {
         TimerCAM.Power.setLed(0);
         photoBlinkActive = false;
+    }
+
+    if (wakeAutoSleepPending && millis() >= wakeAutoSleepDeadlineMs)
+    {
+        enterDeepSleep();
+        return;
     }
 
     // If menu is open, just keep the menu shown and skip camera work
