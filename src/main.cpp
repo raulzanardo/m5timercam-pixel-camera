@@ -21,6 +21,9 @@
 U8G2_SSD1306_64X32_1F_F_HW_I2C display(U8G2_R0, /* reset=*/U8X8_PIN_NONE);
 OneButton button(BUTTON_PIN, true, false);
 
+constexpr uint8_t SSD1306_CMD_CHARGE_PUMP = 0x8D;
+constexpr uint8_t SSD1306_CHARGE_PUMP_9V = 0x95;
+
 bool inMenu = false;
 size_t menuIndex = 0;
 bool statusModeActive = false;
@@ -42,6 +45,15 @@ uint32_t photoCounter = 0;
 bool timerPowerReady = false; // tracks TimerCAM.begin success for power features
 
 static int16_t ditherBuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
+
+void enableDisplayChargePump()
+{
+    u8x8_t *u8x8 = display.getU8x8();
+    u8x8_cad_StartTransfer(u8x8);
+    u8x8_cad_SendCmd(u8x8, SSD1306_CMD_CHARGE_PUMP);
+    u8x8_cad_SendArg(u8x8, SSD1306_CHARGE_PUMP_9V);
+    u8x8_cad_EndTransfer(u8x8);
+}
 
 bool shouldRescanPhotoIndex()
 {
@@ -273,7 +285,8 @@ void setup()
     //     delay(1000);
     // }
 
-    display.begin();
+    display.initDisplay();
+    enableDisplayChargePump();
     display.setPowerSave(0);  // wake OLED after init
     display.setContrast(255); // max contrast for sharper image (can be adjusted down to save power)
     display.setDisplayRotation(U8G2_R2);
