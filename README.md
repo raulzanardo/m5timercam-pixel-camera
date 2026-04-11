@@ -1,6 +1,6 @@
 # M5TimerCAM Pixel Camera
 
-A custom firmware for the M5Stack TimerCAM.
+A custom firmware for the M5Stack TimerCAM focused on low-power shooting, live preview, filtered captures, and Wi-Fi photo export.
 
 <p align="center">
   <img src="images/m5timercamf.png" width="400" alt="M5TimerCAM Device">
@@ -12,39 +12,90 @@ A custom firmware for the M5Stack TimerCAM.
 
 - M5Stack TimerCAM (ESP32-based camera module)
 - OV3660 camera sensor
-- 4MB flash for firmware and photo storage.
+- Custom 16MB flash layout for firmware plus a large LittleFS photo partition
 - 0.49" OLED display (SSD1306, 64X32 pixels)
 
 ## Button GPIO problem
 
 Make sure to check this forum thread about the TimerCam buttons GPIO not having the pull up resistor in it.
 
-[TimerCam Power/Wake button docs – G38 instead of G37](https://community.m5stack.com/topic/4530/timercam-power-wake-button-docs-g38-instead-of-g37)
+[TimerCam Power/Wake button docs - G38 instead of G37](https://community.m5stack.com/topic/4530/timercam-power-wake-button-docs-g38-instead-of-g37)
 
 ## Features
 
-- Real-time camera image processing
-- Pixel art filter
-- Pico-8 inspired color palette
-- OLED display output for live preview
-- **Web interface** for photo management (download and delete)
-- Photo storage on internal flash (LittleFS)
-- Low-power timer-based operation
+- Live OLED preview with center-cropped scaling from the camera sensor
+- One-button photo capture from the live view
+- Optional pixel-art capture filter with auto-adjust plus Pico-8 palette mapping
+- Faster unfiltered capture path using the sensor's hardware JPEG mode
+- Photo storage on LittleFS under `/photos`
+- Persistent photo numbering across reboots and filesystem re-scan protection against overwriting old shots
+- Persistent menu settings stored in Preferences:
+  - filter on/off
+  - wake-shot on/off
+  - next photo index
+- Wake-on-button capture mode that can boot, take a picture automatically, show the result, and return to deep sleep
+- Wi-Fi export mode with a browser interface for browsing and managing saved photos
+- Power-saving runtime behavior:
+  - Wi-Fi and Bluetooth off by default
+  - lower CPU frequency during normal camera operation
+  - higher CPU frequency only while exporting over Wi-Fi
+  - reduced live-preview XCLK to cut active power
+  - camera, OLED, and radio shutdown before deep sleep
+
+## Capture Pipeline
+
+The firmware uses two capture paths depending on whether the artistic filter is enabled:
+
+- `Filter off`: capture directly as JPEG for faster saves and lower processing cost
+- `Filter on`: capture as RGB565, auto-adjust brightness/contrast, quantize to the Pico-8 palette with Bayer dithering, then encode to JPEG
+
+The live preview is separate from the saved photo path. It runs in grayscale, rescales the current frame to fit the OLED, and applies error-diffusion dithering so the tiny display stays readable.
+
+## On-Device Controls
+
+- `Short press` from live view: capture a photo
+- `Long press` from live view: open the menu
+- `Short press` inside the menu: move to the next item
+- `Long press` inside the menu: activate the selected item
+- `Double click` inside the menu: exit the menu
+
+Menu items:
+
+- `off`: shut down peripherals and enter deep sleep
+- `export`: connect to Wi-Fi and start the web export server
+- `filter`: toggle the pixel-art capture filter
+- `wake`: toggle wake-shot mode
+- `status`: show battery percentage and free LittleFS space
+
+When export mode is active, the OLED displays the device IP address. Leaving the menu stops the web server and turns Wi-Fi back off.
+
+## Wake-Shot Mode
+
+Wake-shot is meant for quick, low-interaction shooting:
+
+- Enable `wake` in the menu once
+- Put the device to sleep with the `off` menu item
+- Press the hardware button to wake it
+- On wake, the firmware automatically captures a photo, shows `photo saved` or `photo error`, then returns to deep sleep after a short delay
+
+This mode is useful when you want the camera to behave more like a pocket snapshot device instead of staying in the live preview loop.
 
 ## Web Interface
 
-The camera includes a built-in web server for managing captured photos.
+The camera includes a built-in web server for exporting and managing captured photos.
 
 1. Select "Export" from the on-device menu:
 2. The camera will connect to the WiFi network with credentials from your `config.h`
 3. Open your browser and navigate to the device's IP address
 4. From the web interface you can:
+   - View all saved photos in reverse chronological order
    - **Download** individual photos
+   - **Download all photos as a ZIP**
    - **Delete** specific photos to free up space
    - **Delete all** photos at once
    - View storage statistics (used/free space, photo count, estimated remaining capacity)
 
-The interface features a modern, dark-themed grid layout showing all captured photos with file sizes and easy-to-use controls.
+The interface uses a simple responsive grid and shows each filename, size, and action buttons.
 
 <p align="center">
   <img src="images/web_interface.png" width="300" alt="Web interface preview">
@@ -54,7 +105,7 @@ The interface features a modern, dark-themed grid layout showing all captured ph
 
 This video demonstrates the on-device menu system including the export mode.
 
-Long press enters the menu. While in the menu a short press cylces between the menu items, long press toggles the menu item.
+Long press enters the menu. While in the menu, a short press cycles through items, long press activates the selected item, and a double click exits back to the live preview.
 
 <p align="center">
   <img src="images/display.png" width="400" alt="M5TimerCAM Device">
@@ -63,7 +114,7 @@ Long press enters the menu. While in the menu a short press cylces between the m
 
 ## Live preview
 
-I added a small OLED display to the back of the case so the camera image could be previewd. The image is precessed with dithering and size reduction, it is not the best image but you can kind of figure it ou what is going on. I also had to remove the current two batteries of the case to give space to the display.
+I added a small OLED display to the back of the case so the camera image could be previewed before taking a shot. The firmware scales and center-crops the camera frame, then applies monochrome dithering to make the 64x32 display usable. The result is intentionally rough, but good enough to frame a scene and confirm that the camera is awake and pointed in the right direction.
 
 https://github.com/user-attachments/assets/38396504-9a6e-4b44-8a0a-ec52146e3762
 
@@ -99,6 +150,8 @@ Photos captured with the M5TimerCAM using the pixel art filter and Pico-8 color 
 
 3. Edit `include/config.h` with your settings (WiFi credentials, camera parameters, etc.)
 
+4. If you are using the larger-flash hardware mod or board definition in this repository, keep the provided partition table and board configuration so LittleFS can use the extended storage area.
+
 ## Building
 
 Build the firmware using PlatformIO:
@@ -130,36 +183,30 @@ Edit `include/config.h` to customize:
 - Filter parameters
 - LED behavior
 - Power management
+- Wake-shot timing
+- Export timeout and estimated photo size
+- Menu labels and display constants
 
 See `include/config.example.h` for available options.
 
 ## Project Structure
 
 ```
-├── src/
-│   ├── main.cpp          # Main application logic
-│   └── filter.cpp        # Image filter implementations
-├── include/
-│   ├── config.h          # User configuration (git-ignored)
-│   ├── config.example.h  # Configuration template
-│   ├── filter.h          # Filter definitions
-│   └── palette_pico.h    # Pico-8 color palette
-├── platformio.ini        # PlatformIO configuration
-└── partitions_camera.csv # ESP32 partition table
+boards/
+  m5stack-timer-cam-bigger.json   # 16MB board definition
+include/
+  config.h                        # User configuration (git-ignored)
+  config.example.h                # Configuration template
+lib/
+  camera/                         # Camera init, capture, preview, sleep
+  filter/                         # Auto-adjust and palette filtering
+  ui/                             # OLED menu and button-driven UI
+  web/                            # Wi-Fi export server
+src/
+  main.cpp                        # Application boot and main loop
+platformio.ini                    # PlatformIO environment
+partitions_camera.csv             # 16MB flash partition layout
 ```
-
-## TODO
-
-Future improvements and features to implement:
-
-- **Bigger flash chip** - Upgrade to larger flash memory for:
-  - More filter options and palettes
-  - Image storage capability
-  - Extended feature set without memory constraints
-- **Additional color palettes** - Game Boy, CGA, C64, custom palettes
-- **SD card support** - Save captured images locally
-- **Multiple filter modes** - Switch between different artistic effects
-- **Timelapse mode** - Automated interval shooting
 
 ## License
 
