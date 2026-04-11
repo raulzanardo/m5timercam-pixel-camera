@@ -1,4 +1,4 @@
-#pragma once
+
 #include <stdint.h>
 
 // 16-color Pico-8 style palette

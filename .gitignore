@@ -6,3 +6,4 @@
 
 # Local config with secrets
 include/config.h
+.DS_Store
