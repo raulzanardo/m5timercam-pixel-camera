@@ -14,6 +14,7 @@ A custom firmware for the M5Stack TimerCAM focused on low-power shooting, live p
 - OV3660 camera sensor
 - Internal flash chip upgraded from 4MB to 16MB, with a custom partition layout for firmware plus a large LittleFS photo partition
 - 0.49" OLED display (SSD1306, 64X32 pixels)
+- Battery changed from the default pack to make room for the rear OLED screen
 
 ## Button GPIO problem
 
@@ -114,7 +115,7 @@ Long press enters the menu. While in the menu, a short press cycles through item
 
 ## Live preview
 
-I added a small OLED display to the back of the case so the camera image could be previewed before taking a shot. The firmware scales and center-crops the camera frame, then applies monochrome dithering to make the 64x32 display usable. The result is intentionally rough, but good enough to frame a scene and confirm that the camera is awake and pointed in the right direction.
+I added a small OLED display to the back of the case so the camera image could be previewed before taking a shot. To make space for that rear display, the original battery setup was replaced with a different one that fits the modified enclosure better. The firmware scales and center-crops the camera frame, then applies monochrome dithering to make the 64x32 display usable. The result is intentionally rough, but good enough to frame a scene and confirm that the camera is awake and pointed in the right direction.
 
 https://github.com/user-attachments/assets/38396504-9a6e-4b44-8a0a-ec52146e3762
 
