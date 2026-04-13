@@ -198,6 +198,7 @@ void setup()
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     button.setDebounceMs(30);
     button.setPressMs(700);
+    button.setLongPressIntervalMs(1000);
     button.attachClick(handleButtonClick);
     button.attachDoubleClick(handleButtonDoubleClick);
     button.attachLongPressStart(handleButtonLongPress);

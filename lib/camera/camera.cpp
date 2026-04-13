@@ -9,6 +9,9 @@
 
 namespace
 {
+  constexpr int CAPTURE_GET_FB_RETRIES = 4;
+  constexpr int CAPTURE_GET_FB_RETRY_DELAY_MS = 30;
+
   uint16_t g_xMap[SCREEN_WIDTH];
   uint16_t g_yMap[SCREEN_HEIGHT];
   uint16_t g_cachedSrcWidth = 0;
@@ -55,7 +58,7 @@ namespace
 
   bool initCamera(pixformat_t fmt, framesize_t size, uint32_t xclkHz = XCLK_FREQ_HZ)
   {
-    camera_config_t config;
+    camera_config_t config = {};
     config.ledc_channel = LEDC_CHANNEL_0;
     config.ledc_timer = LEDC_TIMER_0;
     config.pin_d0 = Y2_GPIO_NUM;
@@ -78,7 +81,14 @@ namespace
     config.pixel_format = fmt;
     config.frame_size = size;
     config.jpeg_quality = 0;
-    config.fb_count = (fmt == CAPTURE_PIXEL_FORMAT) ? CAPTURE_FB_COUNT : 1;
+    if (fmt == PIXFORMAT_JPEG)
+    {
+      config.fb_count = 2;
+    }
+    else
+    {
+      config.fb_count = (fmt == CAPTURE_PIXEL_FORMAT) ? CAPTURE_FB_COUNT : 1;
+    }
 
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK)
@@ -170,8 +180,10 @@ namespace CameraService
     // Without a filter we can use hardware JPEG — OV2640 encodes on-sensor,
     // skipping the expensive software fmt2jpg_cb pass.
     const pixformat_t capFmt = filterEnabled ? CAPTURE_PIXEL_FORMAT : PIXFORMAT_JPEG;
+    const framesize_t capFrameSize = filterEnabled ? CAPTURE_FRAME_SIZE_FILTER_ON : CAPTURE_FRAME_SIZE_FILTER_OFF;
+    const uint32_t capXclkHz = filterEnabled ? CAPTURE_XCLK_FREQ_HZ : XCLK_FREQ_HZ;
 
-    if (!initCamera(capFmt, CAPTURE_FRAME_SIZE, CAPTURE_XCLK_FREQ_HZ))
+    if (!initCamera(capFmt, capFrameSize, capXclkHz))
     {
       Serial.println("Failed to init capture mode");
       initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, XCLK_FREQ_HZ);
@@ -194,7 +206,52 @@ namespace CameraService
       delay(CAPTURE_WARMUP_DELAY_MS);
     }
 
-    camera_fb_t *fb = esp_camera_fb_get();
+    camera_fb_t *fb = nullptr;
+    for (int attempt = 0; attempt < CAPTURE_GET_FB_RETRIES; ++attempt)
+    {
+      fb = esp_camera_fb_get();
+      if (fb)
+      {
+        break;
+      }
+
+      Serial.printf("Photo capture failed (attempt %d/%d)\n", attempt + 1, CAPTURE_GET_FB_RETRIES);
+      delay(CAPTURE_GET_FB_RETRY_DELAY_MS);
+    }
+
+    if (!fb && !filterEnabled && capFrameSize == CAPTURE_FRAME_SIZE_FILTER_OFF)
+    {
+      Serial.println("VGA capture unstable, retrying with QVGA fallback");
+      esp_camera_deinit();
+
+      if (initCamera(capFmt, CAPTURE_FRAME_SIZE_FILTER_ON, capXclkHz))
+      {
+        sensor_t *s = esp_camera_sensor_get();
+        if (s)
+          s->set_quality(s, CAPTURE_SENSOR_JPEG_QUALITY);
+
+        for (int i = 0; i < CAPTURE_WARMUP_FRAMES; ++i)
+        {
+          camera_fb_t *warm = esp_camera_fb_get();
+          if (warm)
+            esp_camera_fb_return(warm);
+          delay(CAPTURE_WARMUP_DELAY_MS);
+        }
+
+        for (int attempt = 0; attempt < CAPTURE_GET_FB_RETRIES; ++attempt)
+        {
+          fb = esp_camera_fb_get();
+          if (fb)
+          {
+            break;
+          }
+
+          Serial.printf("QVGA fallback capture failed (attempt %d/%d)\n", attempt + 1, CAPTURE_GET_FB_RETRIES);
+          delay(CAPTURE_GET_FB_RETRY_DELAY_MS);
+        }
+      }
+    }
+
     if (!fb)
     {
       Serial.println("Photo capture failed");
