@@ -1,5 +1,5 @@
 #include "filter.h"
-#include <palette_pico.h>
+#include <palette.h>
 #include <math.h>
 #include <limits.h>
 
@@ -30,20 +30,25 @@ void applyColorPalette(uint16_t *imageBuffer, int width, int height, const uint3
       {63, 31, 55, 23, 61, 29, 53, 21}};
 
   if (bayerSize != 2 && bayerSize != 4 && bayerSize != 8)
-    bayerSize = 2;
-  const int divisor = (bayerSize == 2) ? 4 : (bayerSize == 4) ? 16
-                                                              : 64;
+    bayerSize = 4;
+  const int bayerDivisor = (bayerSize == 2) ? 4 : (bayerSize == 4) ? 16
+                                                                   : 64;
 
-  auto bayerValue = [&](int x, int y)
+  // Match the Bayer response used in the camera pipeline: centered-bin normalization
+  // with a reduced amplitude and slight dark bias.
+  int bayerIntOffsets[8][8] = {};
+  const int bayerStrengthPct = 70;
+  const int bayerBias = -6;
+  for (int by = 0; by < bayerSize; ++by)
   {
-    x %= bayerSize;
-    y %= bayerSize;
-    if (bayerSize == 2)
-      return bayer2x2[y][x];
-    if (bayerSize == 4)
-      return bayer4x4[y][x];
-    return bayer8x8[y][x];
-  };
+    for (int bx = 0; bx < bayerSize; ++bx)
+    {
+      int bv = (bayerSize == 2) ? bayer2x2[by][bx] : (bayerSize == 4) ? bayer4x4[by][bx]
+                                                                      : bayer8x8[by][bx];
+      int baseOffset = (((2 * bv + 1) * 255) / (2 * bayerDivisor)) - 127;
+      bayerIntOffsets[by][bx] = (baseOffset * bayerStrengthPct) / 100 + bayerBias;
+    }
+  }
 
   auto dist2 = [](uint8_t r1, uint8_t g1, uint8_t b1, uint8_t r2, uint8_t g2, uint8_t b2)
   {
@@ -74,11 +79,12 @@ void applyColorPalette(uint16_t *imageBuffer, int width, int height, const uint3
       uint8_t g = ((pix >> 5) & 0x3F) << 2;
       uint8_t b = (pix & 0x1F) << 3;
 
-      int bv = bayerValue(x, y);
-      int offset = int(((bv + 0.5f) * 255.0f) / divisor - 127.5f);
-      r = clamp8(int(r) + offset);
-      g = clamp8(int(g) + offset);
-      b = clamp8(int(b) + offset);
+      int bayerX = x % bayerSize;
+      int bayerY = y % bayerSize;
+      int bayerOffset = bayerIntOffsets[bayerY][bayerX];
+      r = clamp8(int(r) + bayerOffset);
+      g = clamp8(int(g) + bayerOffset);
+      b = clamp8(int(b) + bayerOffset);
 
       int bestIdx = 0;
       int bestDist = INT32_MAX;
@@ -196,4 +202,11 @@ void applyPicoPalette(camera_fb_t *cameraFb)
   if (!cameraFb || !cameraFb->buf)
     return;
   applyColorPalette(reinterpret_cast<uint16_t *>(cameraFb->buf), cameraFb->width, cameraFb->height, PICO_PALETTE, 16, 2);
+}
+
+void applyElevatePalette(camera_fb_t *cameraFb)
+{
+  if (!cameraFb || !cameraFb->buf)
+    return;
+  applyColorPalette(reinterpret_cast<uint16_t *>(cameraFb->buf), cameraFb->width, cameraFb->height, PALETTE_ELEVATE, PALETTE_ELEVATE_SIZE, 2);
 }

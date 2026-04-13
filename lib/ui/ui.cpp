@@ -14,7 +14,7 @@ namespace
   size_t *g_menuIndex = nullptr;
   bool *g_statusModeActive = nullptr;
   bool *g_isOff = nullptr;
-  bool *g_filterEnabled = nullptr;
+  uint8_t *g_paletteMode = nullptr;
   bool *g_wakeShotEnabled = nullptr;
   bool *g_littlefsReady = nullptr;
   bool *g_showToast = nullptr;
@@ -31,22 +31,23 @@ namespace
   {
     Off,
     Export,
-    ToggleFilter,
+    Palette,
     ToggleWakeShot,
     Status,
   };
 
   bool isToggleItem(MenuItem item)
   {
-    return item == MenuItem::ToggleFilter || item == MenuItem::ToggleWakeShot;
+    return item == MenuItem::Palette || item == MenuItem::ToggleWakeShot;
   }
 
   const char *toggleStateLabel(MenuItem item)
   {
     switch (item)
     {
-    case MenuItem::ToggleFilter:
-      return *g_filterEnabled ? "on" : "off";
+    case MenuItem::Palette:
+      return (*g_paletteMode == 0) ? "off" : (*g_paletteMode == 1) ? "pico"
+                                                                   : "elevate";
     case MenuItem::ToggleWakeShot:
       return *g_wakeShotEnabled ? "on" : "off";
     default:
@@ -174,11 +175,12 @@ namespace
       WebExport::start();
       Ui::renderMenu();
       break;
-    case MenuItem::ToggleFilter:
-      *g_filterEnabled = !*g_filterEnabled;
+    case MenuItem::Palette:
+      *g_paletteMode = static_cast<uint8_t>((*g_paletteMode + 1) % 3);
       if (*g_preferencesReady)
       {
-        g_preferences->putBool("filter_enabled", *g_filterEnabled);
+        g_preferences->putUChar("palette_mode", *g_paletteMode);
+        g_preferences->putBool("filter_enabled", *g_paletteMode != 0);
       }
       break;
     case MenuItem::ToggleWakeShot:
@@ -204,7 +206,7 @@ namespace Ui
             size_t &menuIndex,
             bool &statusModeActive,
             bool &isOff,
-            bool &filterEnabled,
+            uint8_t &paletteMode,
             bool &wakeShotEnabled,
             bool &littlefsReady,
             bool &showToast,
@@ -222,7 +224,7 @@ namespace Ui
     g_menuIndex = &menuIndex;
     g_statusModeActive = &statusModeActive;
     g_isOff = &isOff;
-    g_filterEnabled = &filterEnabled;
+    g_paletteMode = &paletteMode;
     g_wakeShotEnabled = &wakeShotEnabled;
     g_littlefsReady = &littlefsReady;
     g_showToast = &showToast;
@@ -302,7 +304,7 @@ namespace Ui
     g_display->drawStr(2, 18, "processing...");
     g_display->sendBuffer();
 
-    CameraService::capturePhotoToJpg(*g_filterEnabled, *g_littlefsReady, *g_photoCounter, *g_preferencesReady, *g_preferences);
+    CameraService::capturePhotoToJpg(*g_paletteMode, *g_littlefsReady, *g_photoCounter, *g_preferencesReady, *g_preferences);
 
     *g_showToast = true;
     *g_toastUntilMs = millis() + TOAST_DURATION_MS;

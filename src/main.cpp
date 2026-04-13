@@ -28,7 +28,7 @@ bool inMenu = false;
 size_t menuIndex = 0;
 bool statusModeActive = false;
 bool isOff = false;
-bool filterEnabled = false;
+uint8_t paletteMode = 0;
 bool wakeShotEnabled = false;
 bool littlefsReady = false;
 bool showToast = false;
@@ -117,7 +117,7 @@ void runWakeShotCapture()
     display.drawStr(2, 18, "processing...");
     display.sendBuffer();
 
-    const bool saved = CameraService::capturePhotoToJpg(filterEnabled, littlefsReady, photoCounter, preferencesReady, preferences);
+    const bool saved = CameraService::capturePhotoToJpg(paletteMode, littlefsReady, photoCounter, preferencesReady, preferences);
 
     showToast = true;
     toastUntilMs = millis() + TOAST_DURATION_MS;
@@ -211,7 +211,12 @@ void setup()
     if (preferencesReady)
     {
         photoCounter = preferences.getUInt("photo_idx", 0);
-        filterEnabled = preferences.getBool("filter_enabled", false);
+        const bool legacyFilterEnabled = preferences.getBool("filter_enabled", false);
+        paletteMode = preferences.getUChar("palette_mode", legacyFilterEnabled ? 1 : 0);
+        if (paletteMode > 2)
+        {
+            paletteMode = 0;
+        }
         wakeShotEnabled = preferences.getBool("wake_shot", false);
     }
 
@@ -222,7 +227,7 @@ void setup()
              menuIndex,
              statusModeActive,
              isOff,
-             filterEnabled,
+             paletteMode,
              wakeShotEnabled,
              littlefsReady,
              showToast,

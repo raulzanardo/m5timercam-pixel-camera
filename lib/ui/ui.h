@@ -11,7 +11,7 @@ namespace Ui
             size_t &menuIndex,
             bool &statusModeActive,
             bool &isOff,
-            bool &filterEnabled,
+            uint8_t &paletteMode,
             bool &wakeShotEnabled,
             bool &littlefsReady,
             bool &showToast,

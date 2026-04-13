@@ -169,12 +169,13 @@ namespace CameraService
     return initCamera(LIVE_PIXEL_FORMAT, LIVE_FRAME_SIZE, XCLK_FREQ_HZ);
   }
 
-  bool capturePhotoToJpg(bool filterEnabled,
+  bool capturePhotoToJpg(uint8_t paletteMode,
                          bool littlefsReady,
                          uint32_t &photoCounter,
                          bool preferencesReady,
                          Preferences &preferences)
   {
+    const bool filterEnabled = paletteMode != 0;
     esp_camera_deinit();
 
     // Without a filter we can use hardware JPEG — OV2640 encodes on-sensor,
@@ -263,7 +264,14 @@ namespace CameraService
     if (filterEnabled)
     {
       applyAutoAdjust(fb);
-      applyPicoPalette(fb);
+      if (paletteMode == 2)
+      {
+        applyElevatePalette(fb);
+      }
+      else
+      {
+        applyPicoPalette(fb);
+      }
     }
 
     saveJpgToSpiffs(fb, !filterEnabled, littlefsReady, photoCounter, preferencesReady, preferences);

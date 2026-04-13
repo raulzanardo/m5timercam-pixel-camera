@@ -13,4 +13,7 @@ void applyAutoAdjust(camera_fb_t *cameraFb);
 // Convenience: apply Pico-8 style palette with Bayer 2x2 dithering
 void applyPicoPalette(camera_fb_t *cameraFb);
 
+// Convenience: apply Elevate palette with Bayer 2x2 dithering
+void applyElevatePalette(camera_fb_t *cameraFb);
+
 #endif // FILTER_H

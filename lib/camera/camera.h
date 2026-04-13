@@ -8,7 +8,7 @@ namespace CameraService
 {
   bool initLive();
 
-  bool capturePhotoToJpg(bool filterEnabled,
+  bool capturePhotoToJpg(uint8_t paletteMode,
                          bool littlefsReady,
                          uint32_t &photoCounter,
                          bool preferencesReady,
