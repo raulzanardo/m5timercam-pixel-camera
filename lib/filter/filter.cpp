@@ -29,22 +29,43 @@ void applyColorPalette(uint16_t *imageBuffer, int width, int height, const uint3
       {15, 47, 7, 39, 13, 45, 5, 37},
       {63, 31, 55, 23, 61, 29, 53, 21}};
 
-  if (bayerSize != 2 && bayerSize != 4 && bayerSize != 8)
-    bayerSize = 4;
+  static const int bayer16x16[16][16] = {
+      {0, 128, 32, 160, 8, 136, 40, 168, 2, 130, 34, 162, 10, 138, 42, 170},
+      {192, 64, 224, 96, 200, 72, 232, 104, 194, 66, 226, 98, 202, 74, 234, 106},
+      {48, 176, 16, 144, 56, 184, 24, 152, 50, 178, 18, 146, 58, 186, 26, 154},
+      {240, 112, 208, 80, 248, 120, 216, 88, 242, 114, 210, 82, 250, 122, 218, 90},
+      {12, 140, 44, 172, 4, 132, 36, 164, 14, 142, 46, 174, 6, 134, 38, 166},
+      {204, 76, 236, 108, 196, 68, 228, 100, 206, 78, 238, 110, 198, 70, 230, 102},
+      {60, 188, 28, 156, 52, 180, 20, 148, 62, 190, 30, 158, 54, 182, 22, 150},
+      {252, 124, 220, 92, 244, 116, 212, 84, 254, 126, 222, 94, 246, 118, 214, 86},
+      {3, 131, 35, 163, 11, 139, 43, 171, 1, 129, 33, 161, 9, 137, 41, 169},
+      {195, 67, 227, 99, 203, 75, 235, 107, 193, 65, 225, 97, 201, 73, 233, 105},
+      {51, 179, 19, 147, 59, 187, 27, 155, 49, 177, 17, 145, 57, 185, 25, 153},
+      {243, 115, 211, 83, 251, 123, 219, 91, 241, 113, 209, 81, 249, 121, 217, 89},
+      {15, 143, 47, 175, 7, 135, 39, 167, 13, 141, 45, 173, 5, 133, 37, 165},
+      {207, 79, 239, 111, 199, 71, 231, 103, 205, 77, 237, 109, 197, 69, 229, 101},
+      {63, 191, 31, 159, 55, 183, 23, 151, 61, 189, 29, 157, 53, 181, 21, 149},
+      {255, 127, 223, 95, 247, 119, 215, 87, 253, 125, 221, 93, 245, 117, 213, 85}};
+
+  if (bayerSize != 2 && bayerSize != 4 && bayerSize != 8 && bayerSize != 16)
+    bayerSize = 16;
   const int bayerDivisor = (bayerSize == 2) ? 4 : (bayerSize == 4) ? 16
-                                                                   : 64;
+                                              : (bayerSize == 8)   ? 64
+                                                                   : 256;
 
   // Match the Bayer response used in the camera pipeline: centered-bin normalization
   // with a reduced amplitude and slight dark bias.
-  int bayerIntOffsets[8][8] = {};
+  int bayerIntOffsets[16][16] = {};
   const int bayerStrengthPct = 70;
   const int bayerBias = -6;
   for (int by = 0; by < bayerSize; ++by)
   {
     for (int bx = 0; bx < bayerSize; ++bx)
     {
-      int bv = (bayerSize == 2) ? bayer2x2[by][bx] : (bayerSize == 4) ? bayer4x4[by][bx]
-                                                                      : bayer8x8[by][bx];
+      int bv = (bayerSize == 2)   ? bayer2x2[by][bx]
+               : (bayerSize == 4) ? bayer4x4[by][bx]
+               : (bayerSize == 8) ? bayer8x8[by][bx]
+                                  : bayer16x16[by][bx];
       int baseOffset = (((2 * bv + 1) * 255) / (2 * bayerDivisor)) - 127;
       bayerIntOffsets[by][bx] = (baseOffset * bayerStrengthPct) / 100 + bayerBias;
     }
@@ -201,12 +222,12 @@ void applyPicoPalette(camera_fb_t *cameraFb)
 {
   if (!cameraFb || !cameraFb->buf)
     return;
-  applyColorPalette(reinterpret_cast<uint16_t *>(cameraFb->buf), cameraFb->width, cameraFb->height, PICO_PALETTE, 16, 2);
+  applyColorPalette(reinterpret_cast<uint16_t *>(cameraFb->buf), cameraFb->width, cameraFb->height, PICO_PALETTE, 16, 16);
 }
 
 void applyElevatePalette(camera_fb_t *cameraFb)
 {
   if (!cameraFb || !cameraFb->buf)
     return;
-  applyColorPalette(reinterpret_cast<uint16_t *>(cameraFb->buf), cameraFb->width, cameraFb->height, PALETTE_ELEVATE, PALETTE_ELEVATE_SIZE, 2);
+  applyColorPalette(reinterpret_cast<uint16_t *>(cameraFb->buf), cameraFb->width, cameraFb->height, PALETTE_ELEVATE, PALETTE_ELEVATE_SIZE, 16);
 }

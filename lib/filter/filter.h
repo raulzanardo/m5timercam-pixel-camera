@@ -5,7 +5,7 @@
 #include <esp_camera.h>
 
 // Generic palette application with optional ordered dithering (Bayer)
-void applyColorPalette(uint16_t *imageBuffer, int width, int height, const uint32_t *palette, int paletteSize, int bayerSize = 2);
+void applyColorPalette(uint16_t *imageBuffer, int width, int height, const uint32_t *palette, int paletteSize, int bayerSize = 16);
 
 // Auto adjust (gamma/contrast/brightness) on RGB565 framebuffer
 void applyAutoAdjust(camera_fb_t *cameraFb);

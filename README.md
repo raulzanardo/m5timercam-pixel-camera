@@ -26,12 +26,12 @@ Make sure to check this forum thread about the TimerCam buttons GPIO not having 
 
 - Live OLED preview with center-cropped scaling from the camera sensor
 - One-button photo capture from the live view
-- Optional pixel-art capture filter with auto-adjust plus Pico-8 palette mapping
+- Optional pixel-art capture with auto-adjust and selectable color palette (Pico-8 or Elevate)
 - Faster unfiltered capture path using the sensor's hardware JPEG mode
 - Photo storage on LittleFS under `/photos`
 - Persistent photo numbering across reboots and filesystem re-scan protection against overwriting old shots
 - Persistent menu settings stored in Preferences:
-  - filter on/off
+  - selected palette (off / pico / elevate)
   - wake-shot on/off
   - next photo index
 - Wake-on-button capture mode that can boot, take a picture automatically, show the result, and return to deep sleep
@@ -45,12 +45,23 @@ Make sure to check this forum thread about the TimerCam buttons GPIO not having 
 
 ## Capture Pipeline
 
-The firmware uses two capture paths depending on whether the artistic filter is enabled:
+The firmware uses two capture paths depending on the palette selector:
 
-- `Filter off`: capture directly as JPEG for faster saves and lower processing cost
-- `Filter on`: capture as RGB565, auto-adjust brightness/contrast, quantize to the Pico-8 palette with Bayer dithering, then encode to JPEG
+- `Palette off`: capture directly as JPEG for faster saves and lower processing cost
+- `Palette on (pico or elevate)`: capture as RGB565, auto-adjust brightness/contrast, apply Bayer ordered dithering, quantize to the selected palette, then encode to JPEG
 
 The live preview is separate from the saved photo path. It runs in grayscale, rescales the current frame to fit the OLED, and applies error-diffusion dithering so the tiny display stays readable.
+
+### Bayer Dithering
+
+The ordered dithering uses a centered-bin integer Bayer matrix with a tuned amplitude (70% of full range) and a slight dark bias to balance the visual output across 2×2, 4×4, and 8×8 matrix sizes.
+
+### Color Palettes
+
+| Name        | Description                                                                                |
+| ----------- | ------------------------------------------------------------------------------------------ |
+| **Pico-8**  | 16-color videogame-inspired palette: bright primaries, pastels, and earth tones            |
+| **Elevate** | 16-color cinematic palette: warm earth tones, deep blues, muted greens, and accent purples |
 
 ## On-Device Controls
 
@@ -64,7 +75,7 @@ Menu items:
 
 - `off`: shut down peripherals and enter deep sleep
 - `export`: connect to Wi-Fi and start the web export server
-- `filter`: toggle the pixel-art capture filter
+- `palette`: cycle the capture palette — `off` → `pico` → `elevate`
 - `wake`: toggle wake-shot mode
 - `status`: show battery percentage and free LittleFS space
 
@@ -121,7 +132,7 @@ https://github.com/user-attachments/assets/38396504-9a6e-4b44-8a0a-ec52146e3762
 
 ## Sample Photos
 
-Photos captured with the M5TimerCAM using the pixel art filter and Pico-8 color palette:
+Photos captured with the M5TimerCAM using the pixel art filter. The palette menu item selects which color set is applied — `pico` uses the classic Pico-8 palette and `elevate` uses a warmer, more cinematic palette:
 
 <p align="center">
   <img src="images/photos/photo_7.jpg" width="300" alt="Sample Photo 1">
@@ -200,7 +211,8 @@ include/
   config.example.h                # Configuration template
 lib/
   camera/                         # Camera init, capture, preview, sleep
-  filter/                         # Auto-adjust and palette filtering
+  filter/                         # Auto-adjust, Bayer dithering, and palette filtering
+    palette.h                     # Pico-8 and Elevate color palette definitions
   ui/                             # OLED menu and button-driven UI
   web/                            # Wi-Fi export server
 src/
@@ -215,7 +227,6 @@ Future improvements and features to implement:
 
 - **Additional color palettes** - Game Boy, CGA, C64, custom palettes
 - **SD card support** - Save captured images locally
-- **Multiple filter modes** - Switch between different artistic effects
 - **Timelapse mode** - Automated interval shooting
 
 ## License
