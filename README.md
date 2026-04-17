@@ -54,7 +54,7 @@ The live preview is separate from the saved photo path. It runs in grayscale, re
 
 ### Bayer Dithering
 
-The ordered dithering uses a centered-bin integer Bayer matrix with a tuned amplitude (70% of full range) and a slight dark bias to balance the visual output across 2×2, 4×4, and 8×8 matrix sizes.
+The ordered dithering uses a centered-bin integer Bayer matrix with a tuned amplitude (70% of full range) and a slight dark bias to balance the visual output across 2×2, 4×4, 8×8, and 16×16 matrix sizes. Both palette filters default to the 16×16 matrix.
 
 ### Color Palettes
 
