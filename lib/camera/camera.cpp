@@ -108,6 +108,7 @@ namespace
       s->set_dcw(s, 1);           // downsize/crop weighting ON
       s->set_raw_gma(s, 1);       // raw gamma ON (more natural tones)
       s->set_exposure_ctrl(s, 1); // enable exposure control (required for auto exposure to work)
+      s->set_aec2(s, 1);          // AEC2 ON (nighttime auto exposure algorithm)
       s->set_lenc(s, 1);          // lens correction ON
     }
     return true;
