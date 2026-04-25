@@ -329,7 +329,8 @@ void loop()
         photoBlinkActive = false;
     }
 
-    if (wakeAutoSleepPending && millis() >= wakeAutoSleepDeadlineMs)
+    const bool menuContextActive = inMenu || Ui::isStatusModeActive() || WebExport::isActive();
+    if (wakeAutoSleepPending && !menuContextActive && millis() >= wakeAutoSleepDeadlineMs)
     {
         enterDeepSleep();
         return;
