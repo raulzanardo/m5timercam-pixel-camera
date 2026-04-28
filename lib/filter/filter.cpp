@@ -54,10 +54,10 @@ void applyColorPalette(uint16_t *imageBuffer, int width, int height, const uint3
                                                                    : 256;
 
   // Match the Bayer response used in the camera pipeline: centered-bin normalization
-  // with a reduced amplitude and slight dark bias.
+  // with a reduced amplitude and a slight bright bias to avoid muddy shadows.
   int bayerIntOffsets[16][16] = {};
   const int bayerStrengthPct = 70;
-  const int bayerBias = -6;
+  const int bayerBias = 4;
   for (int by = 0; by < bayerSize; ++by)
   {
     for (int bx = 0; bx < bayerSize; ++bx)
@@ -178,7 +178,30 @@ void applyAutoAdjust(camera_fb_t *cameraFb)
 
   float contrast = 255.0f / float(maxVal - minVal);
   float brightness = -minVal * contrast;
-  float gamma = 1.0f;
+
+  // Push scene median toward a brighter target, but clamp to avoid highlight clipping.
+  const int medianThreshold = total / 2;
+  acc = 0;
+  int medianVal = 127;
+  for (int i = 0; i < 256; ++i)
+  {
+    acc += hist[i];
+    if (acc >= medianThreshold)
+    {
+      medianVal = i;
+      break;
+    }
+  }
+
+  const float targetMedian = 142.0f;
+  const float medianLift = targetMedian - static_cast<float>(medianVal);
+  brightness += medianLift * 0.6f;
+  if (brightness > 30.0f)
+    brightness = 30.0f;
+  if (brightness < -10.0f)
+    brightness = -10.0f;
+
+  const float gamma = 0.82f;
 
   auto clamp8 = [](int v)
   {

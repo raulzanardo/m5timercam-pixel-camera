@@ -11,6 +11,7 @@ namespace
 {
   constexpr int CAPTURE_GET_FB_RETRIES = 4;
   constexpr int CAPTURE_GET_FB_RETRY_DELAY_MS = 30;
+  constexpr int LIVE_PREVIEW_THRESHOLD = 104;
 
   uint16_t g_xMap[SCREEN_WIDTH];
   uint16_t g_yMap[SCREEN_HEIGHT];
@@ -99,6 +100,7 @@ namespace
     sensor_t *s = esp_camera_sensor_get();
     if (s)
     {
+
       s->set_vflip(s, 1);
       s->set_whitebal(s, 1);      // enable AWB
       s->set_awb_gain(s, 1);      // enable AWB gain
@@ -108,8 +110,8 @@ namespace
       s->set_dcw(s, 1);           // downsize/crop weighting ON
       s->set_raw_gma(s, 1);       // raw gamma ON (more natural tones)
       s->set_exposure_ctrl(s, 1); // enable exposure control (required for auto exposure to work)
-      s->set_aec2(s, 1);          // AEC2 ON (nighttime auto exposure algorithm)
-      s->set_lenc(s, 1);          // lens correction ON
+      // s->set_aec2(s, 1);          // AEC2 ON (nighttime auto exposure algorithm)
+      s->set_lenc(s, 1); // lens correction ON
     }
     return true;
   }
@@ -314,7 +316,7 @@ namespace CameraService
       for (int x = 0; x < SCREEN_WIDTH; x++)
       {
         const int16_t oldPixel = constrain(static_cast<int>(buffer[y][x]), 0, 255);
-        const int16_t newPixel = (oldPixel >= 128) ? 255 : 0;
+        const int16_t newPixel = (oldPixel >= LIVE_PREVIEW_THRESHOLD) ? 255 : 0;
 
         if (newPixel == 255)
         {
