@@ -5,7 +5,7 @@
 namespace WebExport
 {
   void stop();
-  bool start(bool previewOnly = false);
+  bool start();
   void poll();
   bool isActive();
   bool isWifiReady();
